@@ -99,7 +99,7 @@ func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, ``}})
+	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, `{ "Field": "error" }`}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -115,10 +115,11 @@ func Test_HTTPClient_Get_clientError(t *testing.T) {
 	} else {
 		t.Error("Not an HTTPClientError:", err)
 	}
+	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HTTPClient_Get_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, ``}})
+	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "error" }`}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -134,6 +135,7 @@ func Test_HTTPClient_Get_serverError(t *testing.T) {
 	} else {
 		t.Fail()
 	}
+	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HttpClient_Get_cache(t *testing.T) {
@@ -172,7 +174,7 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 }
 
 func Test_HTTPClient_PostForBody_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, ``}})
+	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, `{ "Field": "error" }`}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -188,10 +190,11 @@ func Test_HTTPClient_PostForBody_clientError(t *testing.T) {
 	} else {
 		t.Error("Not an HTTPClientError:", err)
 	}
+	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HTTPClient_PostForBody_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, ``}})
+	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "error" }`}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -207,6 +210,7 @@ func Test_HTTPClient_PostForBody_serverError(t *testing.T) {
 	} else {
 		t.Fail()
 	}
+	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HTTPClient_Post(t *testing.T) {
@@ -352,7 +356,7 @@ func Test_HTTPClient_PatchForBody(t *testing.T) {
 }
 
 func Test_HTTPClient_PatchForBody_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, ``}})
+	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, `{ "Field": "error" }`}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -368,10 +372,11 @@ func Test_HTTPClient_PatchForBody_clientError(t *testing.T) {
 	} else {
 		t.Error("Not an HTTPClientError:", err)
 	}
+	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HTTPClient_PatchForBody_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, ``}})
+	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "error" }`}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -387,6 +392,7 @@ func Test_HTTPClient_PatchForBody_serverError(t *testing.T) {
 	} else {
 		t.Fail()
 	}
+	assert.Equal(t, "error", entity.Field)
 }
 
 type testEntity struct {

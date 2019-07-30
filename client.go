@@ -140,8 +140,10 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 		if err != nil {
 			return errors.Wrapf(err, "lookup failed %v", url)
 		}
-
 		defer resp.Body.Close()
+
+		dec := json.NewDecoder(resp.Body)
+		jsonErr := dec.Decode(entity)
 
 		if http.StatusBadRequest <= resp.StatusCode && resp.StatusCode < http.StatusInternalServerError {
 			clientError = true
@@ -152,10 +154,8 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 			return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
 		}
 
-		dec := json.NewDecoder(resp.Body)
-		err = dec.Decode(entity)
-		if err != nil {
-			return errors.Wrap(err, "decoding response body")
+		if jsonErr != nil {
+			return errors.Wrap(jsonErr, "decoding response body")
 		}
 
 		// Read all additional bytes from the body
@@ -190,14 +190,15 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 	}
 	defer resp.Body.Close()
 
+	dec := json.NewDecoder(resp.Body)
+	jsonErr := dec.Decode(responseBody)
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
 	}
 
-	dec := json.NewDecoder(resp.Body)
-	err = dec.Decode(responseBody)
-	if err != nil {
-		return errors.Wrap(err, "decoding response body")
+	if jsonErr != nil {
+		return errors.Wrap(jsonErr, "decoding response body")
 	}
 
 	// Read all additional bytes from the body
@@ -264,14 +265,15 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	}
 	defer resp.Body.Close()
 
+	dec := json.NewDecoder(resp.Body)
+	jsonErr := dec.Decode(responseBody)
+
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
 	}
 
-	dec := json.NewDecoder(resp.Body)
-	err = dec.Decode(responseBody)
-	if err != nil {
-		return errors.Wrap(err, "decoding response body")
+	if jsonErr != nil {
+		return errors.Wrap(jsonErr, "decoding response body")
 	}
 
 	// Read all additional bytes from the body
