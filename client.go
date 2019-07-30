@@ -170,9 +170,13 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 		}
 	}
 
-	backOff := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), client.maxRetries)
-
-	err := backoff.RetryNotify(doRequest, backOff, notify)
+	var err error
+	if client.maxRetries > 0 {
+		backOff := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), client.maxRetries)
+		err = backoff.RetryNotify(doRequest, backOff, notify)
+	} else {
+		err = doRequest()
+	}
 	if err != nil {
 		return err
 	}

@@ -56,6 +56,20 @@ func Test_HTTPClient_Get(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
+	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "test"}`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient(NoRetries())
+	entity := testEntity{}
+
+	err := client.Get(server.URL+"/", &entity)
+
+	require.Error(t, err)
+	assert.Equal(t, 1, verify.calls)
+}
+
 func Test_HTTPClient_Get_UserAgent(t *testing.T) {
 	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
 	server := httptest.NewServer(handler)
