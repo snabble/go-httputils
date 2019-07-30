@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/cenkalti/backoff"
+	"github.com/cenkalti/backoff/v3"
 	"github.com/die-net/lrucache"
 	"github.com/gregjones/httpcache"
 	"github.com/pkg/errors"
