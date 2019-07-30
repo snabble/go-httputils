@@ -112,44 +112,68 @@ func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
 	assert.Equal(t, "token", verify.token)
 }
 
-func Test_HTTPClient_Get_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, `{ "Field": "error" }`}})
-	server := httptest.NewServer(handler)
-	defer server.Close()
+func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
+	for _, test := range []struct {
+		Name           string
+		StatusCode     int
+		Body           string
+		ExpectedEntity testEntity
+	}{
+		{
+			Name:       "client error no body",
+			StatusCode: http.StatusBadRequest,
+		},
+		{
+			Name:       "client error with invalid body",
+			StatusCode: http.StatusBadRequest,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "client error with body",
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+		{
+			Name:       "server error no body",
+			StatusCode: http.StatusInternalServerError,
+		},
+		{
+			Name:       "server error with invalid body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "server error with body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			handler, verify := testMockServer([]mockResponse{{test.StatusCode, test.Body}})
+			server := httptest.NewServer(handler)
+			defer server.Close()
 
-	client := NewHTTPClient()
-	entity := testEntity{}
+			client := NewHTTPClient(NoRetries())
+			entity := testEntity{}
 
-	err := client.Get(server.URL+"/", &entity)
+			err := client.Get(server.URL+"/", &entity)
 
-	assert.Error(t, err)
-	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
+			assert.Error(t, err)
+			assert.Equal(t, 1, verify.calls)
+			if clientError, ok := err.(HTTPClientError); ok {
+				assert.Equal(t, test.StatusCode, clientError.Code)
+			} else {
+				t.Error("Not an HTTPClientError:", err)
+			}
+			assert.Equal(t, test.ExpectedEntity, entity)
+		})
 	}
-	assert.Equal(t, "error", entity.Field)
-}
-
-func Test_HTTPClient_Get_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "error" }`}})
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	client := NewHTTPClient()
-	entity := testEntity{}
-
-	err := client.Get(server.URL+"/", &entity)
-
-	assert.Error(t, err)
-	assert.Equal(t, 4, verify.calls)
-	if httpError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusInternalServerError, httpError.Code)
-	} else {
-		t.Fail()
-	}
-	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HttpClient_Get_cache(t *testing.T) {
@@ -187,44 +211,68 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 	assert.Equal(t, testEntity{Field: "test"}, response)
 }
 
-func Test_HTTPClient_PostForBody_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, `{ "Field": "error" }`}})
-	server := httptest.NewServer(handler)
-	defer server.Close()
+func Test_HTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
+	for _, test := range []struct {
+		Name           string
+		StatusCode     int
+		Body           string
+		ExpectedEntity testEntity
+	}{
+		{
+			Name:       "client error no body",
+			StatusCode: http.StatusBadRequest,
+		},
+		{
+			Name:       "client error with invalid body",
+			StatusCode: http.StatusBadRequest,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "client error with body",
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+		{
+			Name:       "server error no body",
+			StatusCode: http.StatusInternalServerError,
+		},
+		{
+			Name:       "server error with invalid body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "server error with body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			handler, verify := testMockServer([]mockResponse{{test.StatusCode, test.Body}})
+			server := httptest.NewServer(handler)
+			defer server.Close()
 
-	client := NewHTTPClient()
-	entity := testEntity{}
+			client := NewHTTPClient()
+			entity := testEntity{}
 
-	err := client.PostForBody(server.URL+"/", &entity, &entity)
+			err := client.PostForBody(server.URL+"/", &entity, &entity)
 
-	assert.Error(t, err)
-	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
+			assert.Error(t, err)
+			assert.Equal(t, 1, verify.calls)
+			if clientError, ok := err.(HTTPClientError); ok {
+				assert.Equal(t, test.StatusCode, clientError.Code)
+			} else {
+				t.Error("Not an HTTPClientError:", err)
+			}
+			assert.Equal(t, test.ExpectedEntity, entity)
+		})
 	}
-	assert.Equal(t, "error", entity.Field)
-}
-
-func Test_HTTPClient_PostForBody_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "error" }`}})
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	client := NewHTTPClient()
-	entity := testEntity{}
-
-	err := client.PostForBody(server.URL+"/", &entity, &entity)
-
-	assert.Error(t, err)
-	assert.Equal(t, 1, verify.calls)
-	if httpError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusInternalServerError, httpError.Code)
-	} else {
-		t.Fail()
-	}
-	assert.Equal(t, "error", entity.Field)
 }
 
 func Test_HTTPClient_Post(t *testing.T) {
@@ -369,44 +417,68 @@ func Test_HTTPClient_PatchForBody(t *testing.T) {
 	assert.Equal(t, testEntity{Field: "test"}, response)
 }
 
-func Test_HTTPClient_PatchForBody_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, `{ "Field": "error" }`}})
-	server := httptest.NewServer(handler)
-	defer server.Close()
+func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
+	for _, test := range []struct {
+		Name           string
+		StatusCode     int
+		Body           string
+		ExpectedEntity testEntity
+	}{
+		{
+			Name:       "client error no body",
+			StatusCode: http.StatusBadRequest,
+		},
+		{
+			Name:       "client error with invalid body",
+			StatusCode: http.StatusBadRequest,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "client error with body",
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+		{
+			Name:       "server error no body",
+			StatusCode: http.StatusInternalServerError,
+		},
+		{
+			Name:       "server error with invalid body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "server error with body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			handler, verify := testMockServer([]mockResponse{{test.StatusCode, test.Body}})
+			server := httptest.NewServer(handler)
+			defer server.Close()
 
-	client := NewHTTPClient()
-	entity := testEntity{}
+			client := NewHTTPClient()
+			entity := testEntity{}
 
-	err := client.PatchForBody(server.URL+"/", &entity, &entity)
+			err := client.PatchForBody(server.URL+"/", &entity, &entity)
 
-	assert.Error(t, err)
-	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
+			assert.Error(t, err)
+			assert.Equal(t, 1, verify.calls)
+			if clientError, ok := err.(HTTPClientError); ok {
+				assert.Equal(t, test.StatusCode, clientError.Code)
+			} else {
+				t.Error("Not an HTTPClientError:", err)
+			}
+			assert.Equal(t, test.ExpectedEntity, entity)
+		})
 	}
-	assert.Equal(t, "error", entity.Field)
-}
-
-func Test_HTTPClient_PatchForBody_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "error" }`}})
-	server := httptest.NewServer(handler)
-	defer server.Close()
-
-	client := NewHTTPClient()
-	entity := testEntity{}
-
-	err := client.PatchForBody(server.URL+"/", &entity, &entity)
-
-	assert.Error(t, err)
-	assert.Equal(t, 1, verify.calls)
-	if httpError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusInternalServerError, httpError.Code)
-	} else {
-		t.Fail()
-	}
-	assert.Equal(t, "error", entity.Field)
 }
 
 type testEntity struct {
