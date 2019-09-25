@@ -4,6 +4,8 @@ github.com/davecgh/go-spew v1.1.0 h1:ZDRjVQ15GmhC3fiQ8ni8+OwkZQO4DARzQgrnXU1Liz8
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/die-net/lrucache v0.0.0-20190707192454-883874fe3947 h1:U/5Sq2nJQ0XDyks+8ATghtHSuquIGq7JYrqSrvtR2dg=
 github.com/die-net/lrucache v0.0.0-20190707192454-883874fe3947/go.mod h1:KsMcjmY1UCGl7ozPbdVPDOvLaFeXnptSvtNRczhxNto=
+github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863 h1:GCO7+vxJMpWDNStYDi751B9DJ+ZJiDDy3QWDXCmTc40=
+github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863/go.mod h1:7dwcRmoG9R4pBo4nUMU3ZFbqFGOhMF2v/k9EeB918dg=
 github.com/golang/mock v1.3.1 h1:qGJ6qTW+x6xX/my+8YUVl4WNpX9B7+/l2tRsHGZ7f2s=
 github.com/golang/mock v1.3.1/go.mod h1:sBzyDLLjw3U8JLTeZvSv8jJB+tU5PVekmnlKIyFUx0Y=
 github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 h1:+ngKgrYPPJrOjhax5N+uePQ0Fh1Z7PheYoUI/0nzkPA=

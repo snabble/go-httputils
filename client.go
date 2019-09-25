@@ -9,7 +9,7 @@ import (
 
 	"github.com/cenkalti/backoff/v3"
 	"github.com/die-net/lrucache"
-	"github.com/gregjones/httpcache"
+	"github.com/ecosia/httpcache"
 	"github.com/pkg/errors"
 	logging "github.com/snabble/go-logging"
 )
