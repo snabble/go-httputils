@@ -8,6 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/oauth2"
 )
 
 func Test_HTTPClient_Get(t *testing.T) {
@@ -191,6 +192,21 @@ func Test_HttpClient_Get_cache(t *testing.T) {
 	}
 
 	assert.Equal(t, 1, verify.calls)
+}
+
+func Test_HttpClient_Get_OAuth2(t *testing.T) {
+	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient(UseOAuth2(oauth2.StaticTokenSource(&oauth2.Token{AccessToken: "some-token"})))
+	request := testEntity{Field: "send"}
+
+	err := client.Get(server.URL+"/", &request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "Bearer some-token", verify.authorization)
 }
 
 func Test_HTTPClient_PostForBody(t *testing.T) {
@@ -491,12 +507,13 @@ type mockResponse struct {
 }
 
 type verifications struct {
-	calls       int
-	token       string
-	accept      string
-	contentType string
-	userAgent   string
-	body        string
+	calls         int
+	token         string
+	accept        string
+	contentType   string
+	userAgent     string
+	body          string
+	authorization string
 }
 
 func testMockServer(responses []mockResponse) (http.Handler, *verifications) {
@@ -511,6 +528,7 @@ func testMockServer(responses []mockResponse) (http.Handler, *verifications) {
 			v.accept = r.Header.Get("Accept")
 			v.contentType = r.Header.Get("Content-Type")
 			v.userAgent = r.Header.Get("User-Agent")
+			v.authorization = r.Header.Get("Authorization")
 			body, _ := ioutil.ReadAll(r.Body)
 			v.body = string(body)
 			v.calls++
