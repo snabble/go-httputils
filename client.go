@@ -12,6 +12,7 @@ import (
 	"github.com/ecosia/httpcache"
 	"github.com/pkg/errors"
 	logging "github.com/snabble/go-logging"
+	"golang.org/x/oauth2"
 )
 
 type RequestParam func(*http.Request)
@@ -52,9 +53,10 @@ func (err HTTPClientError) Error() string {
 }
 
 type HTTPClientConfig struct {
-	timeout    time.Duration
-	maxRetries uint64
-	cacheSize  uint64
+	timeout           time.Duration
+	maxRetries        uint64
+	cacheSize         uint64
+	oauth2TokenSource oauth2.TokenSource
 }
 
 type HTTPClientConfigOpt func(config *HTTPClientConfig)
@@ -87,6 +89,12 @@ func DisableCache() HTTPClientConfigOpt {
 	}
 }
 
+func UseOAuth2(source oauth2.TokenSource) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.oauth2TokenSource = source
+	}
+}
+
 var HTTPClientDefaultConfig = HTTPClientConfig{
 	timeout:    time.Second * 5,
 	maxRetries: 3,
@@ -107,19 +115,26 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 	return &HTTPClient{
 		wrapped: http.Client{
 			Timeout:   config.timeout,
-			Transport: selectTransport(int64(config.cacheSize)),
+			Transport: selectTransport(config),
 		},
-		maxRetries: uint64(config.maxRetries),
+		maxRetries: config.maxRetries,
 	}
 }
 
-func selectTransport(cacheSize int64) http.RoundTripper {
-	if cacheSize > 0 {
-		return httpcache.NewTransport(
-			lrucache.New(cacheSize, 0),
+func selectTransport(config HTTPClientConfig) http.RoundTripper {
+	transport := http.DefaultTransport
+	if config.cacheSize > 0 {
+		transport = httpcache.NewTransport(
+			lrucache.New(int64(config.cacheSize), 0),
 		)
 	}
-	return http.DefaultTransport
+	if config.oauth2TokenSource != nil {
+		transport = &oauth2.Transport{
+			Base:   transport,
+			Source: config.oauth2TokenSource,
+		}
+	}
+	return transport
 }
 
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
