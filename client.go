@@ -109,7 +109,7 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 			Timeout:   config.timeout,
 			Transport: selectTransport(int64(config.cacheSize)),
 		},
-		maxRetries: uint64(config.maxRetries),
+		maxRetries: config.maxRetries,
 	}
 }
 
