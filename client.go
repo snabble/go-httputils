@@ -3,6 +3,7 @@ package httputils
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -15,29 +16,60 @@ import (
 	"golang.org/x/oauth2"
 )
 
-type RequestParam func(*http.Request)
+type Encoder func(interface{}) ([]byte, error)
 
-func UserAgent(userAgent string) func(*http.Request) {
-	return func(req *http.Request) {
-		req.Header.Set("User-Agent", userAgent)
+type Decoder func([]byte, interface{}) error
+
+type Request struct {
+	RawRequest         *http.Request
+	Encode             Encoder
+	RequestContentType string
+
+	Decode      Decoder
+	RawResponse *http.Response
+}
+
+type RequestParam func(*Request)
+
+func SetEncoder(e Encoder) func(*Request) {
+	return func(req *Request) {
+		req.Encode = e
 	}
 }
 
-func Accept(mediaType string) func(*http.Request) {
-	return func(req *http.Request) {
-		req.Header.Add("Accept", mediaType)
+func SetDecoder(d Decoder) func(*Request) {
+	return func(req *Request) {
+		req.Decode = d
 	}
 }
 
-func ClientToken(token string) func(*http.Request) {
-	return func(req *http.Request) {
-		req.Header.Set("Client-Token", token)
+func UserAgent(userAgent string) func(*Request) {
+	return func(req *Request) {
+		req.RawRequest.Header.Set("User-Agent", userAgent)
 	}
 }
 
-func BearerAuth(token string) func(*http.Request) {
-	return func(req *http.Request) {
-		req.Header.Set("Authorization", "Bearer "+token)
+func Accept(mediaType string) func(*Request) {
+	return func(req *Request) {
+		req.RawRequest.Header.Add("Accept", mediaType)
+	}
+}
+
+func ClientToken(token string) func(*Request) {
+	return func(req *Request) {
+		req.RawRequest.Header.Set("Client-Token", token)
+	}
+}
+
+func BearerAuth(token string) func(*Request) {
+	return func(req *Request) {
+		req.RawRequest.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+func ContentType(contentType string) func(*Request) {
+	return func(req *Request) {
+		req.RequestContentType = contentType
 	}
 }
 
@@ -138,43 +170,34 @@ func selectTransport(config HTTPClientConfig) http.RoundTripper {
 }
 
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
-	var resp *http.Response
-	clientError := false
-
 	doRequest := func() error {
-		req, err := http.NewRequest(http.MethodGet, url, nil)
+		raw, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			return errors.Wrapf(err, "invalid url %v", url)
 		}
-
+		req := defaultRequest(raw)
 		for _, param := range params {
 			param(req)
 		}
 
-		resp, err = client.wrapped.Do(req)
+		req.RawResponse, err = client.wrapped.Do(req.RawRequest)
 		if err != nil {
 			return errors.Wrapf(err, "lookup failed %v", url)
 		}
-		defer resp.Body.Close()
 
-		dec := json.NewDecoder(resp.Body)
-		jsonErr := dec.Decode(entity)
+		decodeErr := req.decodeBody(entity)
 
-		if http.StatusBadRequest <= resp.StatusCode && resp.StatusCode < http.StatusInternalServerError {
-			clientError = true
-			return nil
+		if http.StatusBadRequest <= req.RawResponse.StatusCode && req.RawResponse.StatusCode < http.StatusInternalServerError {
+			return backoff.Permanent(HTTPClientError{Code: req.RawResponse.StatusCode, Status: req.RawResponse.Status})
 		}
 
-		if resp.StatusCode != http.StatusOK {
-			return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
+		if req.RawResponse.StatusCode != http.StatusOK {
+			return HTTPClientError{Code: req.RawResponse.StatusCode, Status: req.RawResponse.Status}
 		}
 
-		if jsonErr != nil {
-			return errors.Wrap(jsonErr, "decoding response body")
+		if decodeErr != nil {
+			return errors.Wrap(decodeErr, "decoding response body")
 		}
-
-		// Read all additional bytes from the body
-		ioutil.ReadAll(resp.Body)
 
 		return nil
 	}
@@ -186,19 +209,15 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 	}
 
 	var err error
+	var b backoff.BackOff = &backoff.StopBackOff{}
 	if client.maxRetries > 0 {
-		backOff := backoff.WithMaxRetries(backoff.NewExponentialBackOff(), client.maxRetries)
-		err = backoff.RetryNotify(doRequest, backOff, notify)
-	} else {
-		err = doRequest()
+		b = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), client.maxRetries)
 	}
+	err = backoff.RetryNotify(doRequest, b, notify)
 	if err != nil {
 		return err
 	}
 
-	if clientError {
-		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
-	}
 	return nil
 }
 
@@ -207,21 +226,17 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.RawResponse.Body.Close()
 
-	dec := json.NewDecoder(resp.Body)
-	jsonErr := dec.Decode(responseBody)
+	decodeErr := resp.decodeBody(responseBody)
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
+	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
 	}
 
-	if jsonErr != nil {
-		return errors.Wrap(jsonErr, "decoding response body")
+	if decodeErr != nil {
+		return errors.Wrap(decodeErr, "decoding response body")
 	}
-
-	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.Body)
 
 	return nil
 }
@@ -231,14 +246,14 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.RawResponse.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
+	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
 	}
 
 	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.Body)
+	ioutil.ReadAll(resp.RawResponse.Body)
 
 	return nil
 }
@@ -248,14 +263,14 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.RawResponse.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
+	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
 	}
 
 	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.Body)
+	ioutil.ReadAll(resp.RawResponse.Body)
 
 	return nil
 }
@@ -265,14 +280,14 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.RawResponse.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
+	if resp.RawResponse.StatusCode != http.StatusOK {
+		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
 	}
 
 	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.Body)
+	ioutil.ReadAll(resp.RawResponse.Body)
 
 	return nil
 }
@@ -282,50 +297,65 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer resp.RawResponse.Body.Close()
 
-	dec := json.NewDecoder(resp.Body)
-	jsonErr := dec.Decode(responseBody)
+	decodeErr := resp.decodeBody(responseBody)
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.StatusCode, Status: resp.Status}
+	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
 	}
 
-	if jsonErr != nil {
-		return errors.Wrap(jsonErr, "decoding response body")
+	if decodeErr != nil {
+		return errors.Wrap(decodeErr, "decoding response body")
 	}
-
-	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.Body)
 
 	return nil
 }
 
-func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (*http.Response, error) {
-	data, err := json.Marshal(requestBody)
-	if err != nil {
-		return nil, errors.Wrap(err, "marshalling entity")
-	}
-
-	req, err := http.NewRequest(method, url, bytes.NewBuffer(data))
+func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
+	rawReq, err := http.NewRequest(method, url, nil)
 	if err != nil {
 		return nil, errors.Wrapf(err, "invalid url %v", url)
 	}
 
+	req := defaultRequest(rawReq)
+
 	client.applyParams(req, params)
+	req.RawRequest.Header.Set("Content-Type", req.RequestContentType)
 
-	req.Header.Add("Content-Type", "application/json")
+	data, err := req.Encode(requestBody)
+	if err != nil {
+		return nil, errors.Wrap(err, "marshalling entity")
+	}
+	req.RawRequest.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 
-	resp, err := client.wrapped.Do(req)
+	req.RawResponse, err = client.wrapped.Do(req.RawRequest)
 	if err != nil {
 		return nil, errors.Wrapf(err, "request failed %v", url)
 	}
 
-	return resp, nil
+	return req, nil
 }
 
-func (client *HTTPClient) applyParams(req *http.Request, params []RequestParam) {
+func (client *HTTPClient) applyParams(req *Request, params []RequestParam) {
 	for _, param := range params {
 		param(req)
+	}
+}
+
+func (r Request) decodeBody(entity interface{}) error {
+	data, err := ioutil.ReadAll(r.RawResponse.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: '%w'", err)
+	}
+	return r.Decode(data, entity)
+}
+
+func defaultRequest(raw *http.Request) *Request {
+	return &Request{
+		Encode:             json.Marshal,
+		Decode:             json.Unmarshal,
+		RawRequest:         raw,
+		RequestContentType: "application/json",
 	}
 }
