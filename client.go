@@ -21,9 +21,10 @@ type Encoder func(interface{}) ([]byte, error)
 type Decoder func([]byte, interface{}) error
 
 type Request struct {
-	Encode Encoder
-	Decode Decoder
-	Raw    *http.Request
+	Encode   Encoder
+	Decode   Decoder
+	Raw      *http.Request
+	Response *http.Response
 }
 
 type RequestParam func(*Request)
@@ -173,7 +174,7 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 		req := defaultRequest(raw)
 
 		for _, param := range params {
-			param(&req)
+			param(req)
 		}
 
 		resp, err = client.wrapped.Do(req.Raw)
@@ -232,12 +233,12 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 	if err != nil {
 		return err
 	}
-	defer resp.Raw.Body.Close()
+	defer resp.Response.Body.Close()
 
 	decodeErr := resp.decodeBody(responseBody)
 
-	if resp.Raw.StatusCode != http.StatusOK && resp.Raw.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.Raw.StatusCode, Status: resp.Raw.Status}
+	if resp.Response.StatusCode != http.StatusOK && resp.Response.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.Response.StatusCode, Status: resp.Response.Status}
 	}
 
 	if decodeErr != nil {
@@ -252,10 +253,10 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 	if err != nil {
 		return err
 	}
-	defer resp.Raw.Body.Close()
+	defer resp.Response.Body.Close()
 
-	if resp.Raw.StatusCode != http.StatusOK && resp.Raw.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.Raw.StatusCode, Status: resp.Raw.Status}
+	if resp.Response.StatusCode != http.StatusOK && resp.Response.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.Response.StatusCode, Status: resp.Response.Status}
 	}
 
 	// Read all additional bytes from the body
@@ -269,10 +270,10 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 	if err != nil {
 		return err
 	}
-	defer resp.Raw.Body.Close()
+	defer resp.Response.Body.Close()
 
-	if resp.Raw.StatusCode != http.StatusOK && resp.Raw.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.Raw.StatusCode, Status: resp.Raw.Status}
+	if resp.Response.StatusCode != http.StatusOK && resp.Response.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.Response.StatusCode, Status: resp.Response.Status}
 	}
 
 	// Read all additional bytes from the body
@@ -286,14 +287,14 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 	if err != nil {
 		return err
 	}
-	defer resp.Raw.Body.Close()
+	defer resp.Response.Body.Close()
 
-	if resp.Raw.StatusCode != http.StatusOK {
-		return HTTPClientError{Code: resp.Raw.StatusCode, Status: resp.Raw.Status}
+	if resp.Response.StatusCode != http.StatusOK {
+		return HTTPClientError{Code: resp.Response.StatusCode, Status: resp.Response.Status}
 	}
 
 	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.Raw.Body)
+	ioutil.ReadAll(resp.Response.Body)
 
 	return nil
 }
@@ -303,12 +304,12 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	if err != nil {
 		return err
 	}
-	defer resp.Raw.Body.Close()
+	defer resp.Response.Body.Close()
 
 	decodeErr := resp.decodeBody(responseBody)
 
-	if resp.Raw.StatusCode != http.StatusOK && resp.Raw.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.Raw.StatusCode, Status: resp.Raw.Status}
+	if resp.Response.StatusCode != http.StatusOK && resp.Response.StatusCode != http.StatusCreated {
+		return HTTPClientError{Code: resp.Response.StatusCode, Status: resp.Response.Status}
 	}
 
 	if decodeErr != nil {
@@ -318,17 +319,17 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	return nil
 }
 
-func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (response, error) {
+func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
 	rawReq, err := http.NewRequest(method, url, nil)
 	if err != nil {
-		return response{}, errors.Wrapf(err, "invalid url %v", url)
+		return nil, errors.Wrapf(err, "invalid url %v", url)
 	}
 
 	req := defaultRequest(rawReq)
 
 	data, err := req.Encode(requestBody)
 	if err != nil {
-		return response{}, errors.Wrap(err, "marshalling entity")
+		return nil, errors.Wrap(err, "marshalling entity")
 	}
 
 	params = append(params, ContentTypeJSON())
@@ -336,38 +337,30 @@ func (client *HTTPClient) perform(method string, url string, requestBody interfa
 
 	req.Raw.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 
-	rawResp, err := client.wrapped.Do(req.Raw)
+	req.Response, err = client.wrapped.Do(req.Raw)
 	if err != nil {
-		return response{}, errors.Wrapf(err, "request failed %v", url)
+		return nil, errors.Wrapf(err, "request failed %v", url)
 	}
 
-	return response{
-		Raw:    rawResp,
-		Decode: req.Decode,
-	}, nil
+	return req, nil
 }
 
-func (client *HTTPClient) applyParams(req Request, params []RequestParam) {
+func (client *HTTPClient) applyParams(req *Request, params []RequestParam) {
 	for _, param := range params {
-		param(&req)
+		param(req)
 	}
 }
 
-type response struct {
-	Decode Decoder
-	Raw    *http.Response
-}
-
-func (r response) decodeBody(entity interface{}) error {
-	data, err := ioutil.ReadAll(r.Raw.Body)
+func (r Request) decodeBody(entity interface{}) error {
+	data, err := ioutil.ReadAll(r.Response.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: '%w'", err)
 	}
 	return r.Decode(data, entity)
 }
 
-func defaultRequest(raw *http.Request) Request {
-	return Request{
+func defaultRequest(raw *http.Request) *Request {
+	return &Request{
 		Raw:    raw,
 		Encode: json.Marshal,
 		Decode: json.Unmarshal,
