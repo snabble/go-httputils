@@ -113,6 +113,19 @@ func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
 	assert.Equal(t, "token", verify.token)
 }
 
+func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
+	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `not json`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	testEntity := testEntity{}
+	err := client.Get(server.URL+"/", &testEntity, SetDecoder(mockDecode(t)))
+	require.NoError(t, err)
+	assert.Equal(t, "aField", testEntity.Field)
+}
+
 func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
 	for _, test := range []struct {
 		Name           string
@@ -123,11 +136,6 @@ func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
 		{
 			Name:       "client error no body",
 			StatusCode: http.StatusBadRequest,
-		},
-		{
-			Name:       "client error with invalid body",
-			StatusCode: http.StatusBadRequest,
-			Body:       "invalid json",
 		},
 		{
 			Name:       "client error with body",
@@ -225,6 +233,24 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 	assert.Equal(t, testEntity{Field: "test"}, response)
+}
+
+func Test_HTTPClient_PostForBody_SetEncoderAndDecoder(t *testing.T) {
+	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `not json`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+	response := testEntity{}
+
+	err := client.PostForBody(server.URL+"/", &request, &response, SetEncoder(mockEncode(t)), SetDecoder(mockDecode(t)), ContentType("plain"))
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "plain", verify.contentType)
+	assert.Equal(t, `send`, verify.body)
+	assert.Equal(t, testEntity{Field: "aField"}, response)
 }
 
 func Test_HTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
@@ -550,4 +576,23 @@ func min(i, j int) int {
 		return i
 	}
 	return j
+}
+
+func mockDecode(t *testing.T) Decoder {
+	return func(data []byte, entity interface{}) error {
+		assert.Equal(t, "not json", string(data))
+		testEntity, ok := entity.(*testEntity)
+		require.True(t, ok)
+		testEntity.Field = "aField"
+		return nil
+	}
+}
+
+func mockEncode(t *testing.T) Encoder {
+	return func(entity interface{}) ([]byte, error) {
+		testEntity, ok := entity.(*testEntity)
+		require.True(t, ok)
+
+		return []byte(testEntity.Field), nil
+	}
 }

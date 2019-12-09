@@ -21,13 +21,20 @@ type Encoder func(interface{}) ([]byte, error)
 type Decoder func([]byte, interface{}) error
 
 type Request struct {
-	Encode   Encoder
-	Decode   Decoder
-	Raw      *http.Request
-	Response *http.Response
+	Encode      Encoder
+	Decode      Decoder
+	Raw         *http.Request
+	Response    *http.Response
+	ContentType string
 }
 
 type RequestParam func(*Request)
+
+func SetEncoder(e Encoder) func(*Request) {
+	return func(req *Request) {
+		req.Encode = e
+	}
+}
 
 func SetDecoder(d Decoder) func(*Request) {
 	return func(req *Request) {
@@ -59,10 +66,9 @@ func BearerAuth(token string) func(*Request) {
 	}
 }
 
-// This is applied to all requests sending a body by default
-func ContentTypeJSON() func(*Request) {
+func ContentType(contentType string) func(*Request) {
 	return func(req *Request) {
-		req.Raw.Header.Set("Content-Type", "application/json")
+		req.ContentType = contentType
 	}
 }
 
@@ -172,7 +178,6 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 			return errors.Wrapf(err, "invalid url %v", url)
 		}
 		req := defaultRequest(raw)
-
 		for _, param := range params {
 			param(req)
 		}
@@ -327,14 +332,13 @@ func (client *HTTPClient) perform(method string, url string, requestBody interfa
 
 	req := defaultRequest(rawReq)
 
+	client.applyParams(req, params)
+	req.Raw.Header.Set("Content-Type", req.ContentType)
+
 	data, err := req.Encode(requestBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshalling entity")
 	}
-
-	params = append(params, ContentTypeJSON())
-	client.applyParams(req, params)
-
 	req.Raw.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 
 	req.Response, err = client.wrapped.Do(req.Raw)
@@ -361,8 +365,9 @@ func (r Request) decodeBody(entity interface{}) error {
 
 func defaultRequest(raw *http.Request) *Request {
 	return &Request{
-		Raw:    raw,
-		Encode: json.Marshal,
-		Decode: json.Unmarshal,
+		Raw:         raw,
+		Encode:      json.Marshal,
+		Decode:      json.Unmarshal,
+		ContentType: "application/json",
 	}
 }
