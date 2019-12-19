@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -124,6 +125,23 @@ func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
 	err := client.Get(server.URL+"/", &testEntity, SetDecoder(mockDecode(t)))
 	require.NoError(t, err)
 	assert.Equal(t, "aField", testEntity.Field)
+}
+
+func Test_HTTPClient_Get_LogCalls(t *testing.T) {
+	called := false
+
+	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient(
+		LogCalls(func(r *http.Request, resp *http.Response, start time.Time, err error) { called = true }),
+	)
+
+	err := client.Get(server.URL+"/", &testEntity{})
+
+	require.NoError(t, err)
+	assert.True(t, called)
 }
 
 func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
