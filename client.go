@@ -84,11 +84,14 @@ func (err HTTPClientError) Error() string {
 	return err.Status
 }
 
+type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err error)
+
 type HTTPClientConfig struct {
 	timeout           time.Duration
 	maxRetries        uint64
 	cacheSize         uint64
 	oauth2TokenSource oauth2.TokenSource
+	logCall           CallLogger
 }
 
 type HTTPClientConfigOpt func(config *HTTPClientConfig)
@@ -127,15 +130,23 @@ func UseOAuth2(source oauth2.TokenSource) HTTPClientConfigOpt {
 	}
 }
 
+func LogCalls(logger CallLogger) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.logCall = logger
+	}
+}
+
 var HTTPClientDefaultConfig = HTTPClientConfig{
 	timeout:    time.Second * 5,
 	maxRetries: 3,
 	cacheSize:  disableCache,
+	logCall:    func(r *http.Request, resp *http.Response, start time.Time, err error) {},
 }
 
 type HTTPClient struct {
 	wrapped    http.Client
 	maxRetries uint64
+	logCall    CallLogger
 }
 
 func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
@@ -150,6 +161,7 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 			Transport: selectTransport(config),
 		},
 		maxRetries: config.maxRetries,
+		logCall:    config.logCall,
 	}
 }
 
@@ -180,9 +192,8 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 			param(req)
 		}
 
-		req.RawResponse, err = client.wrapped.Do(req.RawRequest)
-		if err != nil {
-			return errors.Wrapf(err, "lookup failed %v", url)
+		if err := client.do(req); err != nil {
+			return err
 		}
 
 		decodeErr := req.decodeBody(entity)
@@ -329,12 +340,24 @@ func (client *HTTPClient) perform(method string, url string, requestBody interfa
 	}
 	req.RawRequest.Body = ioutil.NopCloser(bytes.NewBuffer(data))
 
+	if err := client.do(req); err != nil {
+		return nil, err
+	}
+	return req, nil
+}
+
+func (client *HTTPClient) do(req *Request) (err error) {
+	start := time.Now()
+
 	req.RawResponse, err = client.wrapped.Do(req.RawRequest)
+
+	client.logCall(req.RawRequest, req.RawResponse, start, err)
+
 	if err != nil {
-		return nil, errors.Wrapf(err, "request failed %v", url)
+		return errors.Wrapf(err, "request failed %v", req.RawRequest.URL.String())
 	}
 
-	return req, nil
+	return nil
 }
 
 func (client *HTTPClient) applyParams(req *Request, params []RequestParam) {
