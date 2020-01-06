@@ -1,6 +1,8 @@
 package httputils
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -56,6 +58,28 @@ func Test_HTTPClient_Get(t *testing.T) {
 			assert.Equal(t, test.expected, entity)
 		})
 	}
+}
+
+func Test_HTTPClient_TLSConfig(t *testing.T) {
+	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	server := httptest.NewUnstartedServer(handler)
+	server.Config.TLSConfig = &tls.Config{
+		Certificates: []tls.Certificate{readKeyPair(t, "server")},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    readCertPool(t),
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	client := NewHTTPClient(TLSConfig(
+		&tls.Config{Certificates: []tls.Certificate{readKeyPair(t, "client")}, InsecureSkipVerify: true},
+	))
+	entity := testEntity{}
+
+	err := client.Get(server.URL+"/", &entity)
+
+	require.NoError(t, err)
+	assert.Equal(t, testEntity{Field: "test"}, entity)
 }
 
 func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
@@ -613,4 +637,18 @@ func mockEncode(t *testing.T) Encoder {
 
 		return []byte(testEntity.Field), nil
 	}
+}
+
+func readKeyPair(t *testing.T, name string) tls.Certificate {
+	cert, err := tls.LoadX509KeyPair("test-certs/"+name+".pem", "test-certs/"+name+".key")
+	require.NoError(t, err)
+	return cert
+}
+
+func readCertPool(t *testing.T) *x509.CertPool {
+	certpool := x509.NewCertPool()
+	pem, err := ioutil.ReadFile("test-certs/ca.pem")
+	require.NoError(t, err)
+	require.True(t, certpool.AppendCertsFromPEM(pem))
+	return certpool
 }
