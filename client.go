@@ -2,6 +2,7 @@ package httputils
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -88,6 +89,7 @@ type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err 
 
 type HTTPClientConfig struct {
 	timeout           time.Duration
+	tlsConfig         *tls.Config
 	maxRetries        uint64
 	cacheSize         uint64
 	oauth2TokenSource oauth2.TokenSource
@@ -99,6 +101,12 @@ type HTTPClientConfigOpt func(config *HTTPClientConfig)
 func Timeout(timeout time.Duration) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.timeout = timeout
+	}
+}
+
+func TLSConfig(tlsConfig *tls.Config) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.tlsConfig = tlsConfig
 	}
 }
 
@@ -166,18 +174,29 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 }
 
 func selectTransport(config HTTPClientConfig) http.RoundTripper {
-	transport := http.DefaultTransport
+	transport := createTransport(config)
+
 	if config.cacheSize > 0 {
-		transport = httpcache.NewTransport(
-			lrucache.New(int64(config.cacheSize), 0),
-		)
+		transport = &httpcache.Transport{
+			Transport:           transport,
+			Cache:               lrucache.New(int64(config.cacheSize), 0),
+			MarkCachedResponses: true,
+		}
 	}
+
 	if config.oauth2TokenSource != nil {
 		transport = &oauth2.Transport{
 			Base:   transport,
 			Source: config.oauth2TokenSource,
 		}
 	}
+
+	return transport
+}
+
+func createTransport(config HTTPClientConfig) http.RoundTripper {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = config.tlsConfig
 	return transport
 }
 
