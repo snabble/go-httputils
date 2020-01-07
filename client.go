@@ -100,6 +100,7 @@ type HTTPClientConfig struct {
 	tlsConfig         *tls.Config
 	maxRetries        uint64
 	cacheSize         uint64
+	token             string
 	oauth2TokenSource oauth2.TokenSource
 	logCall           CallLogger
 }
@@ -137,6 +138,12 @@ func CacheSize(size uint64) HTTPClientConfigOpt {
 func DisableCache() HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.cacheSize = disableCache
+	}
+}
+
+func UseBearerAuth(token string) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.token = token
 	}
 }
 
@@ -183,6 +190,13 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 
 func selectTransport(config HTTPClientConfig) http.RoundTripper {
 	transport := createTransport(config)
+
+	if config.token != "" {
+		transport = &AuthTransport{
+			Transport: transport,
+			Token:     config.token,
+		}
+	}
 
 	if config.cacheSize > 0 {
 		transport = &httpcache.Transport{

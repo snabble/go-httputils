@@ -60,28 +60,6 @@ func Test_HTTPClient_Get(t *testing.T) {
 	}
 }
 
-func Test_HTTPClient_TLSConfig(t *testing.T) {
-	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
-	server := httptest.NewUnstartedServer(handler)
-	server.Config.TLSConfig = &tls.Config{
-		Certificates: []tls.Certificate{readKeyPair(t, "server")},
-		ClientAuth:   tls.RequireAndVerifyClientCert,
-		ClientCAs:    readCertPool(t),
-	}
-	server.StartTLS()
-	defer server.Close()
-
-	client := NewHTTPClient(TLSConfig(
-		&tls.Config{Certificates: []tls.Certificate{readKeyPair(t, "client")}, InsecureSkipVerify: true},
-	))
-	entity := testEntity{}
-
-	err := client.Get(server.URL+"/", &entity)
-
-	require.NoError(t, err)
-	assert.Equal(t, testEntity{Field: "test"}, entity)
-}
-
 func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
 	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "test"}`}})
 	server := httptest.NewServer(handler)
@@ -257,6 +235,43 @@ func Test_HttpClient_Get_OAuth2(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
 	assert.Equal(t, "Bearer some-token", verify.authorization)
+}
+
+func Test_HttpClient_Get_UseBearerAuth(t *testing.T) {
+	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient(UseBearerAuth("some-token"))
+	request := testEntity{Field: "send"}
+
+	err := client.Get(server.URL+"/", &request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "Bearer some-token", verify.authorization)
+}
+
+func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
+	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	server := httptest.NewUnstartedServer(handler)
+	server.Config.TLSConfig = &tls.Config{
+		Certificates: []tls.Certificate{readKeyPair(t, "server")},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    readCertPool(t),
+	}
+	server.StartTLS()
+	defer server.Close()
+
+	client := NewHTTPClient(TLSConfig(
+		&tls.Config{Certificates: []tls.Certificate{readKeyPair(t, "client")}, InsecureSkipVerify: true},
+	))
+	entity := testEntity{}
+
+	err := client.Get(server.URL+"/", &entity)
+
+	require.NoError(t, err)
+	assert.Equal(t, testEntity{Field: "test"}, entity)
 }
 
 func Test_HTTPClient_PostForBody(t *testing.T) {
