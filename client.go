@@ -22,12 +22,20 @@ type Encoder func(interface{}) ([]byte, error)
 type Decoder func([]byte, interface{}) error
 
 type Request struct {
-	RawRequest         *http.Request
-	Encode             Encoder
-	RequestContentType string
+	RawRequest *http.Request
+	Header     http.Header
+	Encode     Encoder
 
 	Decode      Decoder
 	RawResponse *http.Response
+}
+
+func (req *Request) applyHeader() {
+	for name, values := range req.Header {
+		for _, value := range values {
+			req.RawRequest.Header.Add(name, value)
+		}
+	}
 }
 
 type RequestParam func(*Request)
@@ -46,31 +54,31 @@ func SetDecoder(d Decoder) func(*Request) {
 
 func UserAgent(userAgent string) func(*Request) {
 	return func(req *Request) {
-		req.RawRequest.Header.Set("User-Agent", userAgent)
+		req.Header.Set("User-Agent", userAgent)
 	}
 }
 
 func Accept(mediaType string) func(*Request) {
 	return func(req *Request) {
-		req.RawRequest.Header.Add("Accept", mediaType)
+		req.Header.Add("Accept", mediaType)
 	}
 }
 
 func ClientToken(token string) func(*Request) {
 	return func(req *Request) {
-		req.RawRequest.Header.Set("Client-Token", token)
+		req.Header.Set("Client-Token", token)
 	}
 }
 
 func BearerAuth(token string) func(*Request) {
 	return func(req *Request) {
-		req.RawRequest.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Authorization", "Bearer "+token)
 	}
 }
 
 func ContentType(contentType string) func(*Request) {
 	return func(req *Request) {
-		req.RequestContentType = contentType
+		req.Header.Set("Content-Type", contentType)
 	}
 }
 
@@ -92,6 +100,7 @@ type HTTPClientConfig struct {
 	tlsConfig         *tls.Config
 	maxRetries        uint64
 	cacheSize         uint64
+	token             string
 	oauth2TokenSource oauth2.TokenSource
 	logCall           CallLogger
 }
@@ -129,6 +138,12 @@ func CacheSize(size uint64) HTTPClientConfigOpt {
 func DisableCache() HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.cacheSize = disableCache
+	}
+}
+
+func UseBearerAuth(token string) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.token = token
 	}
 }
 
@@ -176,6 +191,13 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 func selectTransport(config HTTPClientConfig) http.RoundTripper {
 	transport := createTransport(config)
 
+	if config.token != "" {
+		transport = &AuthTransport{
+			Transport: transport,
+			Token:     config.token,
+		}
+	}
+
 	if config.cacheSize > 0 {
 		transport = &httpcache.Transport{
 			Transport:           transport,
@@ -195,20 +217,21 @@ func selectTransport(config HTTPClientConfig) http.RoundTripper {
 }
 
 func createTransport(config HTTPClientConfig) http.RoundTripper {
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	transport.TLSClientConfig = config.tlsConfig
-	return transport
+	return &http.Transport{
+		TLSClientConfig: config.tlsConfig,
+	}
 }
 
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
 	doRequest := func() error {
-		raw, err := http.NewRequest(http.MethodGet, url, nil)
+		var err error
+
+		req := defaultRequest()
+		applyParams(req, params)
+
+		req.RawRequest, err = http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {
 			return errors.Wrapf(err, "invalid url %v", url)
-		}
-		req := defaultRequest(raw)
-		for _, param := range params {
-			param(req)
 		}
 
 		if err := client.do(req); err != nil {
@@ -343,21 +366,18 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 }
 
 func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
-	rawReq, err := http.NewRequest(method, url, nil)
-	if err != nil {
-		return nil, errors.Wrapf(err, "invalid url %v", url)
-	}
-
-	req := defaultRequest(rawReq)
-
-	client.applyParams(req, params)
-	req.RawRequest.Header.Set("Content-Type", req.RequestContentType)
+	req := defaultRequest()
+	applyParams(req, params)
 
 	data, err := req.Encode(requestBody)
 	if err != nil {
 		return nil, errors.Wrap(err, "marshalling entity")
 	}
-	req.RawRequest.Body = ioutil.NopCloser(bytes.NewBuffer(data))
+
+	req.RawRequest, err = http.NewRequest(method, url, bytes.NewBuffer(data))
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid url %v", url)
+	}
 
 	if err := client.do(req); err != nil {
 		return nil, err
@@ -366,6 +386,8 @@ func (client *HTTPClient) perform(method string, url string, requestBody interfa
 }
 
 func (client *HTTPClient) do(req *Request) (err error) {
+	req.applyHeader()
+
 	start := time.Now()
 
 	req.RawResponse, err = client.wrapped.Do(req.RawRequest)
@@ -379,7 +401,7 @@ func (client *HTTPClient) do(req *Request) (err error) {
 	return nil
 }
 
-func (client *HTTPClient) applyParams(req *Request, params []RequestParam) {
+func applyParams(req *Request, params []RequestParam) {
 	for _, param := range params {
 		param(req)
 	}
@@ -393,11 +415,14 @@ func (r Request) decodeBody(entity interface{}) error {
 	return r.Decode(data, entity)
 }
 
-func defaultRequest(raw *http.Request) *Request {
+func defaultRequest() *Request {
+	header := http.Header{}
+	header.Add("Content-Type", "application/json")
+
 	return &Request{
-		Encode:             json.Marshal,
-		Decode:             json.Unmarshal,
-		RawRequest:         raw,
-		RequestContentType: "application/json",
+		Header: header,
+
+		Encode: json.Marshal,
+		Decode: json.Unmarshal,
 	}
 }
