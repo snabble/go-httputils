@@ -101,6 +101,8 @@ type HTTPClientConfig struct {
 	maxRetries        uint64
 	cacheSize         uint64
 	token             string
+	username          string
+	password          string
 	oauth2TokenSource oauth2.TokenSource
 	logCall           CallLogger
 }
@@ -144,6 +146,13 @@ func DisableCache() HTTPClientConfigOpt {
 func UseBearerAuth(token string) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.token = token
+	}
+}
+
+func UseBasicAuth(username, password string) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.username = username
+		config.password = password
 	}
 }
 
@@ -191,8 +200,16 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 func selectTransport(config HTTPClientConfig) http.RoundTripper {
 	transport := createTransport(config)
 
+	if config.username != "" || config.password != "" {
+		transport = &BasicAuthTransport{
+			Username:  config.username,
+			Password:  config.password,
+			Transport: transport,
+		}
+	}
+
 	if config.token != "" {
-		transport = &AuthTransport{
+		transport = &BearerAuthTransport{
 			Transport: transport,
 			Token:     config.token,
 		}
