@@ -252,6 +252,21 @@ func Test_HttpClient_Get_UseBearerAuth(t *testing.T) {
 	assert.Equal(t, "Bearer some-token", verify.authorization)
 }
 
+func Test_HttpClient_Get_UseBasicAuth(t *testing.T) {
+	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient(UseBasicAuth("user", "secret"))
+	request := testEntity{Field: "send"}
+
+	err := client.Get(server.URL+"/", &request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "Basic dXNlcjpzZWNyZXQ=", verify.authorization)
+}
+
 func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
 	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
 	server := httptest.NewUnstartedServer(handler)
