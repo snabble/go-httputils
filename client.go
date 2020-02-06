@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	"time"
@@ -12,7 +14,6 @@ import (
 	"github.com/cenkalti/backoff/v3"
 	"github.com/die-net/lrucache"
 	"github.com/ecosia/httpcache"
-	"github.com/pkg/errors"
 	logging "github.com/snabble/go-logging"
 	"golang.org/x/oauth2"
 )
@@ -98,7 +99,8 @@ type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err 
 type HTTPClientConfig struct {
 	timeout           time.Duration
 	tlsConfig         *tls.Config
-	maxRetries        uint64
+	maxRetriesGet     uint64
+	maxRetriesOther   uint64
 	cacheSize         uint64
 	token             string
 	username          string
@@ -123,7 +125,8 @@ func TLSConfig(tlsConfig *tls.Config) HTTPClientConfigOpt {
 
 func MaxRetries(retries uint64) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
-		config.maxRetries = retries
+		config.maxRetriesGet = retries
+		config.maxRetriesOther = retries
 	}
 }
 
@@ -169,16 +172,18 @@ func LogCalls(logger CallLogger) HTTPClientConfigOpt {
 }
 
 var HTTPClientDefaultConfig = HTTPClientConfig{
-	timeout:    time.Second * 5,
-	maxRetries: 3,
-	cacheSize:  disableCache,
-	logCall:    func(r *http.Request, resp *http.Response, start time.Time, err error) {},
+	timeout:         time.Second * 5,
+	maxRetriesGet:   3,
+	maxRetriesOther: 0,
+	cacheSize:       disableCache,
+	logCall:         func(r *http.Request, resp *http.Response, start time.Time, err error) {},
 }
 
 type HTTPClient struct {
-	wrapped    http.Client
-	maxRetries uint64
-	logCall    CallLogger
+	wrapped         http.Client
+	maxRetriesGet   uint64
+	maxRetriesOther uint64
+	logCall         CallLogger
 }
 
 func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
@@ -192,8 +197,9 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 			Timeout:   config.timeout,
 			Transport: selectTransport(config),
 		},
-		maxRetries: config.maxRetries,
-		logCall:    config.logCall,
+		maxRetriesGet:   config.maxRetriesGet,
+		maxRetriesOther: config.maxRetriesOther,
+		logCall:         config.logCall,
 	}
 }
 
@@ -240,146 +246,156 @@ func createTransport(config HTTPClientConfig) http.RoundTripper {
 }
 
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
-	doRequest := func() error {
-		var err error
+	return client.withBackoff(
+		url,
+		client.maxRetriesGet,
+		func() error {
+			var err error
 
-		req := defaultRequest()
-		applyParams(req, params)
+			req := defaultRequest()
+			applyParams(req, params)
 
-		req.RawRequest, err = http.NewRequest(http.MethodGet, url, nil)
-		if err != nil {
-			return errors.Wrapf(err, "invalid url %v", url)
-		}
+			req.RawRequest, err = http.NewRequest(http.MethodGet, url, nil)
+			if err != nil {
+				return wrapErrorF(err, "invalid url %v", url)
+			}
 
-		if err := client.do(req); err != nil {
-			return err
-		}
+			if err := client.do(req); err != nil {
+				return err
+			}
 
-		decodeErr := req.decodeBody(entity)
+			decodeErr := req.decodeBody(entity)
 
-		if http.StatusBadRequest <= req.RawResponse.StatusCode && req.RawResponse.StatusCode < http.StatusInternalServerError {
-			return backoff.Permanent(HTTPClientError{Code: req.RawResponse.StatusCode, Status: req.RawResponse.Status})
-		}
+			if http.StatusBadRequest <= req.RawResponse.StatusCode && req.RawResponse.StatusCode < http.StatusInternalServerError {
+				return permanentHTTPError(req)
+			}
 
-		if req.RawResponse.StatusCode != http.StatusOK {
-			return HTTPClientError{Code: req.RawResponse.StatusCode, Status: req.RawResponse.Status}
-		}
+			if req.RawResponse.StatusCode != http.StatusOK {
+				return httpError(req)
+			}
 
-		if decodeErr != nil {
-			return errors.Wrap(decodeErr, "decoding response body")
-		}
+			if decodeErr != nil {
+				return wrapError(decodeErr, "decoding response body")
+			}
 
-		return nil
-	}
-
-	notify := func(err error, duration time.Duration) {
-		if err != nil {
-			logging.Logger.WithError(err).Errorf("request failed to '%s', retry in %v", url, duration)
-		}
-	}
-
-	var err error
-	var b backoff.BackOff = &backoff.StopBackOff{}
-	if client.maxRetries > 0 {
-		b = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), client.maxRetries)
-	}
-	err = backoff.RetryNotify(doRequest, b, notify)
-	if err != nil {
-		return err
-	}
-
-	return nil
+			return nil
+		},
+	)
 }
 
 func (client *HTTPClient) PostForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
-	resp, err := client.perform(http.MethodPost, url, requestBody, params...)
-	if err != nil {
-		return err
-	}
-	defer resp.RawResponse.Body.Close()
+	return client.performWithRetries(
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			decodeErr := resp.decodeBody(responseBody)
 
-	decodeErr := resp.decodeBody(responseBody)
+			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+				return permanentHTTPError(resp)
+			}
 
-	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
-	}
+			if decodeErr != nil {
+				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			}
 
-	if decodeErr != nil {
-		return errors.Wrap(decodeErr, "decoding response body")
-	}
-
-	return nil
+			return nil
+		},
+	)
 }
 
 func (client *HTTPClient) Post(url string, requestBody interface{}, params ...RequestParam) error {
-	resp, err := client.perform(http.MethodPost, url, requestBody, params...)
-	if err != nil {
-		return err
-	}
-	defer resp.RawResponse.Body.Close()
+	return client.performWithRetries(
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			// Read all additional bytes from the body
+			defer ioutil.ReadAll(resp.RawResponse.Body)
 
-	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
-	}
+			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+				return permanentHTTPError(resp)
+			}
 
-	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.RawResponse.Body)
-
-	return nil
+			return nil
+		},
+	)
 }
 
 func (client *HTTPClient) Put(url string, requestBody interface{}, params ...RequestParam) error {
-	resp, err := client.perform(http.MethodPut, url, requestBody, params...)
-	if err != nil {
-		return err
-	}
-	defer resp.RawResponse.Body.Close()
+	return client.performWithRetries(
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			// Read all additional bytes from the body
+			defer ioutil.ReadAll(resp.RawResponse.Body)
 
-	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
-	}
+			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+				return permanentHTTPError(resp)
+			}
 
-	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.RawResponse.Body)
-
-	return nil
+			return nil
+		},
+	)
 }
 
 func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...RequestParam) error {
-	resp, err := client.perform(http.MethodPatch, url, requestBody, params...)
-	if err != nil {
-		return err
-	}
-	defer resp.RawResponse.Body.Close()
+	return client.performWithRetries(
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			// Read all additional bytes from the body
+			defer ioutil.ReadAll(resp.RawResponse.Body)
 
-	if resp.RawResponse.StatusCode != http.StatusOK {
-		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
-	}
+			if resp.RawResponse.StatusCode != http.StatusOK {
+				return permanentHTTPError(resp)
+			}
 
-	// Read all additional bytes from the body
-	ioutil.ReadAll(resp.RawResponse.Body)
-
-	return nil
+			return nil
+		},
+	)
 }
 
 func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
-	resp, err := client.perform(http.MethodPatch, url, requestBody, params...)
-	if err != nil {
-		return err
-	}
-	defer resp.RawResponse.Body.Close()
+	return client.performWithRetries(
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			decodeErr := resp.decodeBody(responseBody)
 
-	decodeErr := resp.decodeBody(responseBody)
+			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+				return permanentHTTPError(resp)
+			}
 
-	if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
-		return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
-	}
+			if decodeErr != nil {
+				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			}
 
-	if decodeErr != nil {
-		return errors.Wrap(decodeErr, "decoding response body")
-	}
+			return nil
+		},
+	)
+}
 
-	return nil
+func (client *HTTPClient) performWithRetries(url string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
+	return client.withBackoff(
+		url,
+		client.maxRetriesOther,
+		func() error {
+			resp, err := client.perform(http.MethodPost, url, requestBody, params...)
+			if errors.Is(err, io.EOF) {
+				return err
+			}
+			if err != nil {
+				return backoff.Permanent(err)
+			}
+			defer resp.RawResponse.Body.Close()
+
+			return handleResponse(resp)
+		},
+	)
 }
 
 func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
@@ -388,12 +404,12 @@ func (client *HTTPClient) perform(method string, url string, requestBody interfa
 
 	data, err := req.Encode(requestBody)
 	if err != nil {
-		return nil, errors.Wrap(err, "marshalling entity")
+		return nil, wrapError(err, "marshalling entity")
 	}
 
 	req.RawRequest, err = http.NewRequest(method, url, bytes.NewBuffer(data))
 	if err != nil {
-		return nil, errors.Wrapf(err, "invalid url %v", url)
+		return nil, wrapErrorF(err, "invalid url %v", url)
 	}
 
 	if err := client.do(req); err != nil {
@@ -412,7 +428,27 @@ func (client *HTTPClient) do(req *Request) (err error) {
 	client.logCall(req.RawRequest, req.RawResponse, start, err)
 
 	if err != nil {
-		return errors.Wrapf(err, "request failed %v", req.RawRequest.URL.String())
+		return wrapErrorF(err, "request failed %v", req.RawRequest.URL.String())
+	}
+
+	return nil
+}
+
+func (client *HTTPClient) withBackoff(url string, maxRetries uint64, doRequest func() error) error {
+	notify := func(err error, duration time.Duration) {
+		if err != nil {
+			logging.Logger.WithError(err).Errorf("request failed to '%s', retry in %v", url, duration)
+		}
+	}
+
+	var err error
+	var b backoff.BackOff = &backoff.StopBackOff{}
+	if maxRetries > 0 {
+		b = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries)
+	}
+	err = backoff.RetryNotify(doRequest, b, notify)
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -442,4 +478,12 @@ func defaultRequest() *Request {
 		Encode: json.Marshal,
 		Decode: json.Unmarshal,
 	}
+}
+
+func permanentHTTPError(resp *Request) error {
+	return backoff.Permanent(httpError(resp))
+}
+
+func httpError(resp *Request) error {
+	return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
 }
