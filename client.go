@@ -9,6 +9,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/cenkalti/backoff/v3"
@@ -384,12 +387,19 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	)
 }
 
-func (client *HTTPClient) performWithRetries(method, url string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
+func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
 	return client.withBackoff(
-		url,
+		reqURL,
 		client.maxRetriesOther,
 		func() error {
-			resp, err := client.perform(method, url, requestBody, params...)
+			resp, err := client.perform(method, reqURL, requestBody, params...)
+			if err, ok := err.(*url.Error); ok && err.Temporary() {
+				return err
+			}
+			var syscallErr *os.SyscallError
+			if errors.As(err, &syscallErr) && syscallErr.Err == syscall.ECONNRESET {
+				return err
+			}
 			if errors.Is(err, io.EOF) {
 				return err
 			}

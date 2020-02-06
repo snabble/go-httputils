@@ -797,6 +797,9 @@ func (server *testServer) do() {
 			}
 
 			server.calls++
+
+			time.Sleep(10 * time.Millisecond)
+
 			conn.Close()
 		}
 	}()
