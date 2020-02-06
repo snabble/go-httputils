@@ -1,0 +1,10 @@
+language: go
+go:
+- '1.13'
+notifications:
+  email: false
+  slack:
+    on_success: :change
+    on_failure: :always
+    rooms:
+      secure: b4AFo7CL/z9EQrarJQGcShP95p3weD9cSN8wVD5gZ2d5ir8MCd3SIWZl0mSvZJmD8EFtl7Rxn0WQcAKGhc10PwjA59dcNHXDB0dCKiCKVxkJQ5PsBiCoUZo16duVA7wod86rjVpA49RDD7A0WutkWej0NBFrtMOx2aXdEaZ+n2nXDddViDFHUOjbMRXKITmkGQZfn2gz6nEmPBXZI3Q7yHCaEUjS2dj4Xwy1AtUluIMsqt9gp14EbTFe2z9Wm8Cn6tn3ulLFyMYLiGtuyHfzE0rKcIcw33+LRkUzPl1DOhLrttkU4td3SOgSgr7VjxjrBr2gKd3LtYSisDgNPJONZ5rZWqdSPCNWQJyIJ2AFM+qDwhegeW9lx+3JFIH7NxOIRRmDTyL3otzDRczKKwyXCJHYoV/p/kRHlaSnVgdhFDiNcpEzwuMK9qC3nE7hu4uJMM5AIzmRmwAboL8AmL+2qGTdhVUBnbbZDo1oGswB6esD/eziA9JqrkmD9VvodaMCm7Xweb4p2kBt1fEZP1ZVdC0qTavEyx98OgjTyKRGhxy8fTe+8bJHOjhPKtfIgfxbzo3f+pNBE+PZbNC+OfhEnWIwgPLIulrYYCanZYdvBRtjMgXL9t2+SKYtEx2gDFHkt6iK7ltOhCzH/NLbCzQhZwbtF5nspPavkqXSZdn9fQA=

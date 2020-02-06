@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -45,7 +46,7 @@ func Test_HTTPClient_Get(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			handler, _ := testMockServer(test.responses)
+			handler, verify := testMockServer(test.responses)
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
@@ -56,6 +57,7 @@ func Test_HTTPClient_Get(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, entity)
+			assert.Equal(t, http.MethodGet, verify.method)
 		})
 	}
 }
@@ -302,9 +304,36 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 	assert.Equal(t, testEntity{Field: "test"}, response)
+}
+
+func Test_HTTPClient_PostForBody_RetriesOnConnectionError(t *testing.T) {
+	server := connectionClosingServer(t)
+
+	client := NewHTTPClient(MaxRetries(1))
+	request := testEntity{Field: "send"}
+	response := testEntity{}
+
+	err := client.PostForBody(server.url, &request, &response)
+
+	require.Error(t, err)
+	assert.Equal(t, 2, server.calls)
+}
+
+func Test_HTTPClient_PostForBody_NotRetriesOnConnectionError(t *testing.T) {
+	server := connectionClosingServer(t)
+
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+	response := testEntity{}
+
+	err := client.PostForBody(server.url, &request, &response)
+
+	require.Error(t, err)
+	assert.Equal(t, 1, server.calls)
 }
 
 func Test_HTTPClient_PostForBody_SetEncoderAndDecoder(t *testing.T) {
@@ -321,7 +350,7 @@ func Test_HTTPClient_PostForBody_SetEncoderAndDecoder(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
 	assert.Equal(t, "plain", verify.contentType)
-	assert.Equal(t, `send`, verify.body)
+	assert.Equal(t, "send", verify.body)
 	assert.Equal(t, testEntity{Field: "aField"}, response)
 }
 
@@ -401,6 +430,7 @@ func Test_HTTPClient_Post(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
@@ -443,6 +473,18 @@ func Test_HTTPClient_Post_serverError(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Post_retriesOnConnectionError(t *testing.T) {
+	server := connectionClosingServer(t)
+
+	client := NewHTTPClient(MaxRetries(1))
+	request := testEntity{Field: "send"}
+
+	err := client.Post(server.url, &request)
+
+	require.Error(t, err)
+	assert.Equal(t, 2, server.calls)
+}
+
 func Test_HTTPClient_Put(t *testing.T) {
 	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `{ "Field": "test"}`}})
 	server := httptest.NewServer(handler)
@@ -455,6 +497,7 @@ func Test_HTTPClient_Put(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPut, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
@@ -478,6 +521,18 @@ func Test_HTTPClient_Put_clientError(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
+	server := connectionClosingServer(t)
+
+	client := NewHTTPClient(MaxRetries(1))
+	request := testEntity{Field: "send"}
+
+	err := client.Put(server.url, &request)
+
+	require.Error(t, err)
+	assert.Equal(t, 2, server.calls)
+}
+
 func Test_HTTPClient_Patch(t *testing.T) {
 	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
 	server := httptest.NewServer(handler)
@@ -490,6 +545,7 @@ func Test_HTTPClient_Patch(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPatch, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
@@ -513,6 +569,18 @@ func Test_HTTPClient_Patch_clientError(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
+	server := connectionClosingServer(t)
+
+	client := NewHTTPClient(MaxRetries(1))
+	request := testEntity{Field: "send"}
+
+	err := client.Patch(server.url, &request)
+
+	require.Error(t, err)
+	assert.Equal(t, 2, server.calls)
+}
+
 func Test_HTTPClient_PatchForBody(t *testing.T) {
 	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `{ "Field": "test"}`}})
 	server := httptest.NewServer(handler)
@@ -526,9 +594,23 @@ func Test_HTTPClient_PatchForBody(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPatch, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 	assert.Equal(t, testEntity{Field: "test"}, response)
+}
+
+func Test_HTTPClient_PatchForBody_retriesOnConnectionError(t *testing.T) {
+	server := connectionClosingServer(t)
+
+	client := NewHTTPClient(MaxRetries(1))
+	request := testEntity{Field: "send"}
+	response := testEntity{}
+
+	err := client.PatchForBody(server.url, &request, &response)
+
+	require.Error(t, err)
+	assert.Equal(t, 2, server.calls)
 }
 
 func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
@@ -606,6 +688,7 @@ type mockResponse struct {
 
 type verifications struct {
 	calls         int
+	method        string
 	token         string
 	accept        string
 	contentType   string
@@ -622,6 +705,7 @@ func testMockServer(responses []mockResponse) (http.Handler, *verifications) {
 	mux.HandleFunc(
 		"/",
 		func(w http.ResponseWriter, r *http.Request) {
+			v.method = r.Method
 			v.token = r.Header.Get("Client-Token")
 			v.accept = r.Header.Get("Accept")
 			v.contentType = r.Header.Get("Content-Type")
@@ -681,4 +765,46 @@ func readCertPool(t *testing.T) *x509.CertPool {
 	require.NoError(t, err)
 	require.True(t, certpool.AppendCertsFromPEM(pem))
 	return certpool
+}
+
+type testServer struct {
+	listener net.Listener
+	url      string
+	calls    int
+}
+
+func connectionClosingServer(t *testing.T) *testServer {
+	ln, err := net.Listen("tcp", "[::]:0")
+	require.NoError(t, err)
+
+	server := &testServer{
+		listener: ln,
+		url:      "http://" + ln.Addr().String(),
+		calls:    0,
+	}
+
+	server.do()
+
+	return server
+}
+
+func (server *testServer) do() {
+	go func() {
+		for {
+			conn, err := server.listener.Accept()
+			if err != nil {
+				return
+			}
+
+			server.calls++
+
+			time.Sleep(10 * time.Millisecond)
+
+			conn.Close()
+		}
+	}()
+}
+
+func (server *testServer) close() {
+	server.listener.Close()
 }
