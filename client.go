@@ -285,6 +285,7 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 
 func (client *HTTPClient) PostForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
+		http.MethodPost,
 		url,
 		requestBody,
 		params,
@@ -306,6 +307,7 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 
 func (client *HTTPClient) Post(url string, requestBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
+		http.MethodPost,
 		url,
 		requestBody,
 		params,
@@ -324,6 +326,7 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 
 func (client *HTTPClient) Put(url string, requestBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
+		http.MethodPut,
 		url,
 		requestBody,
 		params,
@@ -342,6 +345,7 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 
 func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
+		http.MethodPatch,
 		url,
 		requestBody,
 		params,
@@ -360,6 +364,7 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 
 func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
+		http.MethodPatch,
 		url,
 		requestBody,
 		params,
@@ -379,12 +384,12 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	)
 }
 
-func (client *HTTPClient) performWithRetries(url string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
+func (client *HTTPClient) performWithRetries(method, url string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
 	return client.withBackoff(
 		url,
 		client.maxRetriesOther,
 		func() error {
-			resp, err := client.perform(http.MethodPost, url, requestBody, params...)
+			resp, err := client.perform(method, url, requestBody, params...)
 			if errors.Is(err, io.EOF) {
 				return err
 			}
@@ -398,7 +403,7 @@ func (client *HTTPClient) performWithRetries(url string, requestBody interface{}
 	)
 }
 
-func (client *HTTPClient) perform(method string, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
+func (client *HTTPClient) perform(method, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
 	req := defaultRequest()
 	applyParams(req, params)
 

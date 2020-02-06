@@ -46,7 +46,7 @@ func Test_HTTPClient_Get(t *testing.T) {
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			handler, _ := testMockServer(test.responses)
+			handler, verify := testMockServer(test.responses)
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
@@ -57,6 +57,7 @@ func Test_HTTPClient_Get(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, test.expected, entity)
+			assert.Equal(t, http.MethodGet, verify.method)
 		})
 	}
 }
@@ -303,6 +304,7 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 	assert.Equal(t, testEntity{Field: "test"}, response)
@@ -428,6 +430,7 @@ func Test_HTTPClient_Post(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
@@ -494,6 +497,7 @@ func Test_HTTPClient_Put(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPut, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
@@ -541,6 +545,7 @@ func Test_HTTPClient_Patch(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPatch, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
@@ -589,6 +594,7 @@ func Test_HTTPClient_PatchForBody(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPatch, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 	assert.Equal(t, testEntity{Field: "test"}, response)
@@ -682,6 +688,7 @@ type mockResponse struct {
 
 type verifications struct {
 	calls         int
+	method        string
 	token         string
 	accept        string
 	contentType   string
@@ -698,6 +705,7 @@ func testMockServer(responses []mockResponse) (http.Handler, *verifications) {
 	mux.HandleFunc(
 		"/",
 		func(w http.ResponseWriter, r *http.Request) {
+			v.method = r.Method
 			v.token = r.Header.Get("Client-Token")
 			v.accept = r.Header.Get("Accept")
 			v.contentType = r.Header.Get("Content-Type")
