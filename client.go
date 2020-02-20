@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/cenkalti/backoff/v3"
+	"github.com/cenkalti/backoff/v4"
 	"github.com/die-net/lrucache"
 	"github.com/ecosia/httpcache"
 	logging "github.com/snabble/go-logging"
@@ -452,21 +452,15 @@ func (client *HTTPClient) do(req *Request) (err error) {
 func (client *HTTPClient) withBackoff(url string, maxRetries uint64, doRequest func() error) error {
 	notify := func(err error, duration time.Duration) {
 		if err != nil {
-			logging.Logger.WithError(err).Errorf("request failed to '%s', retry in %v", url, duration)
+			logging.Logger.WithError(err).Warnf("request failed to '%s', retry in %v", url, duration)
 		}
 	}
 
-	var err error
-	var b backoff.BackOff = &backoff.StopBackOff{}
-	if maxRetries > 0 {
-		b = backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries)
-	}
-	err = backoff.RetryNotify(doRequest, b, notify)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return backoff.RetryNotify(
+		doRequest,
+		backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries),
+		notify,
+	)
 }
 
 func applyParams(req *Request, params []RequestParam) {

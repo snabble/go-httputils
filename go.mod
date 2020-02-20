@@ -3,7 +3,7 @@ module github.com/snabble/go-httputils
 go 1.12
 
 require (
-	github.com/cenkalti/backoff/v3 v3.0.0
+	github.com/cenkalti/backoff/v4 v4.0.0
 	github.com/die-net/lrucache v0.0.0-20190707192454-883874fe3947
 	github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863
 	github.com/konsorten/go-windows-terminal-sequences v1.0.2 // indirect
