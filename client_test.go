@@ -312,6 +312,7 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 
 func Test_HTTPClient_PostForBody_RetriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -325,6 +326,7 @@ func Test_HTTPClient_PostForBody_RetriesOnConnectionError(t *testing.T) {
 
 func Test_HTTPClient_PostForBody_NotRetriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient()
 	request := testEntity{Field: "send"}
@@ -475,6 +477,7 @@ func Test_HTTPClient_Post_serverError(t *testing.T) {
 
 func Test_HTTPClient_Post_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -523,6 +526,7 @@ func Test_HTTPClient_Put_clientError(t *testing.T) {
 
 func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -571,6 +575,7 @@ func Test_HTTPClient_Patch_clientError(t *testing.T) {
 
 func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -602,6 +607,7 @@ func Test_HTTPClient_PatchForBody(t *testing.T) {
 
 func Test_HTTPClient_PatchForBody_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
