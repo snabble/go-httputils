@@ -387,6 +387,29 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 	)
 }
 
+func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
+	return client.performWithRetries(
+		http.MethodDelete,
+		url,
+		nil,
+		params,
+		func(resp *Request) error {
+			// Read all additional bytes from the body
+			defer ioutil.ReadAll(resp.RawResponse.Body)
+
+			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
+				return permanentHTTPError(resp)
+			}
+
+			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusNoContent && resp.RawResponse.StatusCode != http.StatusAccepted {
+				return httpError(resp)
+			}
+
+			return nil
+		},
+	)
+}
+
 func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
 	return client.withBackoff(
 		reqURL,

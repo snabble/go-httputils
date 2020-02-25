@@ -677,6 +677,52 @@ func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Delete(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		responses []mockResponse
+	}{
+		{
+			name: "success",
+			responses: []mockResponse{
+				{http.StatusOK, `{"message": "deleted"}`},
+			},
+		},
+		{
+			name: "no content",
+			responses: []mockResponse{
+				{http.StatusNoContent, ``},
+			},
+		},
+		{
+			name: "accepted",
+			responses: []mockResponse{
+				{http.StatusAccepted, `{"willDelete": "later"}`},
+			},
+		},
+		{
+			name: "success after retry",
+			responses: []mockResponse{
+				{http.StatusInternalServerError, `{"error": "occurred"}`},
+				{http.StatusOK, `{"message": "deleted"}`},
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler, verify := testMockServer(test.responses)
+			server := httptest.NewServer(handler)
+			defer server.Close()
+
+			client := NewHTTPClient(MaxRetries(3))
+
+			err := client.Delete(server.URL + "/")
+
+			require.NoError(t, err)
+			assert.Equal(t, http.MethodDelete, verify.method)
+		})
+	}
+}
+
 type testEntity struct {
 	Field string
 }
