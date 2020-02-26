@@ -312,6 +312,7 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 
 func Test_HTTPClient_PostForBody_RetriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -325,6 +326,7 @@ func Test_HTTPClient_PostForBody_RetriesOnConnectionError(t *testing.T) {
 
 func Test_HTTPClient_PostForBody_NotRetriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient()
 	request := testEntity{Field: "send"}
@@ -475,6 +477,7 @@ func Test_HTTPClient_Post_serverError(t *testing.T) {
 
 func Test_HTTPClient_Post_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -523,6 +526,7 @@ func Test_HTTPClient_Put_clientError(t *testing.T) {
 
 func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -571,6 +575,7 @@ func Test_HTTPClient_Patch_clientError(t *testing.T) {
 
 func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -602,6 +607,7 @@ func Test_HTTPClient_PatchForBody(t *testing.T) {
 
 func Test_HTTPClient_PatchForBody_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
+	defer server.close()
 
 	client := NewHTTPClient(MaxRetries(1))
 	request := testEntity{Field: "send"}
@@ -673,6 +679,52 @@ func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 				t.Error("Not an HTTPClientError:", err)
 			}
 			assert.Equal(t, test.ExpectedEntity, entity)
+		})
+	}
+}
+
+func Test_HTTPClient_Delete(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		responses []mockResponse
+	}{
+		{
+			name: "success",
+			responses: []mockResponse{
+				{http.StatusOK, `{"message": "deleted"}`},
+			},
+		},
+		{
+			name: "no content",
+			responses: []mockResponse{
+				{http.StatusNoContent, ``},
+			},
+		},
+		{
+			name: "accepted",
+			responses: []mockResponse{
+				{http.StatusAccepted, `{"willDelete": "later"}`},
+			},
+		},
+		{
+			name: "success after retry",
+			responses: []mockResponse{
+				{http.StatusInternalServerError, `{"error": "occurred"}`},
+				{http.StatusOK, `{"message": "deleted"}`},
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			handler, verify := testMockServer(test.responses)
+			server := httptest.NewServer(handler)
+			defer server.Close()
+
+			client := NewHTTPClient(MaxRetries(3))
+
+			err := client.Delete(server.URL + "/")
+
+			require.NoError(t, err)
+			assert.Equal(t, http.MethodDelete, verify.method)
 		})
 	}
 }
