@@ -42,6 +42,10 @@ func (req *Request) applyHeader() {
 	}
 }
 
+func (req *Request) isSuccessfulPost() bool {
+	return req.RawResponse.StatusCode == http.StatusOK || req.RawResponse.StatusCode == http.StatusCreated
+}
+
 type RequestParam func(*Request)
 
 func SetEncoder(e Encoder) func(*Request) {
@@ -318,13 +322,37 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 			// Read all additional bytes from the body
 			defer ioutil.ReadAll(resp.RawResponse.Body)
 
-			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
 
 			return nil
 		},
 	)
+}
+
+func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, params ...RequestParam) (string, error) {
+	var location string
+	err := client.performWithRetries(
+		http.MethodPost,
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			// Read all additional bytes from the body
+			defer ioutil.ReadAll(resp.RawResponse.Body)
+
+			if !resp.isSuccessfulPost() {
+				return permanentHTTPError(resp)
+			}
+
+			location = resp.RawResponse.Header.Get("Location")
+
+			return nil
+		},
+	)
+
+	return location, err
 }
 
 func (client *HTTPClient) Put(url string, requestBody interface{}, params ...RequestParam) error {
@@ -337,7 +365,7 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 			// Read all additional bytes from the body
 			defer ioutil.ReadAll(resp.RawResponse.Body)
 
-			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
 

@@ -18,29 +18,29 @@ import (
 func Test_HTTPClient_Get(t *testing.T) {
 	for _, test := range []struct {
 		name      string
-		responses []mockResponse
+		responses []mockServerResponse
 		expected  testEntity
 	}{
 		{
 			name: "success",
-			responses: []mockResponse{
-				{http.StatusOK, `{ "Field": "test"}`},
+			responses: []mockServerResponse{
+				mockResponse(http.StatusOK, `{ "Field": "test"}`),
 			},
 			expected: testEntity{Field: "test"},
 		},
 		{
 			name: "success after retry",
-			responses: []mockResponse{
-				{http.StatusInternalServerError, ``},
-				{http.StatusOK, `{ "Field": "test"}`},
+			responses: []mockServerResponse{
+				mockResponse(http.StatusInternalServerError, ``),
+				mockResponse(http.StatusOK, `{ "Field": "test"}`),
 			},
 			expected: testEntity{Field: "test"},
 		},
 		{
 			name: "retries if response was corrupted",
-			responses: []mockResponse{
-				{http.StatusOK, `}{`},
-				{http.StatusOK, `{ "Field": "test"}`},
+			responses: []mockServerResponse{
+				mockResponse(http.StatusOK, `}{`),
+				mockResponse(http.StatusOK, `{ "Field": "test"}`),
 			},
 			expected: testEntity{Field: "test"},
 		},
@@ -63,7 +63,7 @@ func Test_HTTPClient_Get(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusInternalServerError, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -77,7 +77,7 @@ func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_UserAgent(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -91,7 +91,7 @@ func Test_HTTPClient_Get_UserAgent(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_AcceptHeader(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -105,7 +105,7 @@ func Test_HTTPClient_Get_AcceptHeader(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -119,7 +119,7 @@ func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
-	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `not json`}})
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `not json`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -134,7 +134,7 @@ func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
 func Test_HTTPClient_Get_LogCalls(t *testing.T) {
 	called := false
 
-	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -186,7 +186,7 @@ func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
 		},
 	} {
 		t.Run(test.Name, func(t *testing.T) {
-			handler, verify := testMockServer([]mockResponse{{test.StatusCode, test.Body}})
+			handler, verify := testMockServer(mockResponses(test.StatusCode, test.Body))
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
@@ -208,7 +208,9 @@ func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
 }
 
 func Test_HttpClient_Get_cache(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	handler, verify := testMockServer([]mockServerResponse{
+		{statusCode: http.StatusOK, body: `{}`, header: map[string]string{"Cache-Control": "max-age=3600"}},
+	})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -225,7 +227,7 @@ func Test_HttpClient_Get_cache(t *testing.T) {
 }
 
 func Test_HttpClient_Get_OAuth2(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -240,7 +242,7 @@ func Test_HttpClient_Get_OAuth2(t *testing.T) {
 }
 
 func Test_HttpClient_Get_UseBearerAuth(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -255,7 +257,7 @@ func Test_HttpClient_Get_UseBearerAuth(t *testing.T) {
 }
 
 func Test_HttpClient_Get_UseBasicAuth(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -270,7 +272,7 @@ func Test_HttpClient_Get_UseBasicAuth(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
-	handler, _ := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewUnstartedServer(handler)
 	server.Config.TLSConfig = &tls.Config{
 		Certificates: []tls.Certificate{readKeyPair(t, "server")},
@@ -292,7 +294,7 @@ func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
 }
 
 func Test_HTTPClient_PostForBody(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -339,7 +341,7 @@ func Test_HTTPClient_PostForBody_NotRetriesOnConnectionError(t *testing.T) {
 }
 
 func Test_HTTPClient_PostForBody_SetEncoderAndDecoder(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `not json`}})
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `not json`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -399,7 +401,7 @@ func Test_HTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
 		},
 	} {
 		t.Run(test.Name, func(t *testing.T) {
-			handler, verify := testMockServer([]mockResponse{{test.StatusCode, test.Body}})
+			handler, verify := testMockServer(mockResponses(test.StatusCode, test.Body))
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
@@ -421,7 +423,7 @@ func Test_HTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
 }
 
 func Test_HTTPClient_Post(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -438,7 +440,7 @@ func Test_HTTPClient_Post(t *testing.T) {
 }
 
 func Test_HTTPClient_Post_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, ``}})
+	handler, verify := testMockServer(mockResponses(http.StatusBadRequest, ``))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -457,7 +459,7 @@ func Test_HTTPClient_Post_clientError(t *testing.T) {
 }
 
 func Test_HTTPClient_Post_serverError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusInternalServerError, ``}})
+	handler, verify := testMockServer(mockResponses(http.StatusInternalServerError, ``))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -488,8 +490,25 @@ func Test_HTTPClient_Post_retriesOnConnectionError(t *testing.T) {
 	assert.Equal(t, 2, server.calls)
 }
 
+func Test_HTTPClient_PostForLocation(t *testing.T) {
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+
+	err := client.Post(server.URL+"/", &request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
+	assert.Equal(t, "application/json", verify.contentType)
+	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
+}
+
 func Test_HTTPClient_Put(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -506,7 +525,7 @@ func Test_HTTPClient_Put(t *testing.T) {
 }
 
 func Test_HTTPClient_Put_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, ``}})
+	handler, verify := testMockServer(mockResponses(http.StatusBadRequest, ``))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -538,7 +557,7 @@ func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
 }
 
 func Test_HTTPClient_Patch(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusOK, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -555,7 +574,7 @@ func Test_HTTPClient_Patch(t *testing.T) {
 }
 
 func Test_HTTPClient_Patch_clientError(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusBadRequest, ``}})
+	handler, verify := testMockServer(mockResponses(http.StatusBadRequest, ``))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -587,7 +606,7 @@ func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
 }
 
 func Test_HTTPClient_PatchForBody(t *testing.T) {
-	handler, verify := testMockServer([]mockResponse{{http.StatusCreated, `{ "Field": "test"}`}})
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
@@ -662,7 +681,7 @@ func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 		},
 	} {
 		t.Run(test.Name, func(t *testing.T) {
-			handler, verify := testMockServer([]mockResponse{{test.StatusCode, test.Body}})
+			handler, verify := testMockServer(mockResponses(test.StatusCode, test.Body))
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
@@ -686,31 +705,25 @@ func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 func Test_HTTPClient_Delete(t *testing.T) {
 	for _, test := range []struct {
 		name      string
-		responses []mockResponse
+		responses []mockServerResponse
 	}{
 		{
-			name: "success",
-			responses: []mockResponse{
-				{http.StatusOK, `{"message": "deleted"}`},
-			},
+			name:      "success",
+			responses: mockResponses(http.StatusOK, `{"message": "deleted"}`),
 		},
 		{
-			name: "no content",
-			responses: []mockResponse{
-				{http.StatusNoContent, ``},
-			},
+			name:      "no content",
+			responses: mockResponses(http.StatusNoContent, ``),
 		},
 		{
-			name: "accepted",
-			responses: []mockResponse{
-				{http.StatusAccepted, `{"willDelete": "later"}`},
-			},
+			name:      "accepted",
+			responses: mockResponses(http.StatusAccepted, `{"willDelete": "later"}`),
 		},
 		{
 			name: "success after retry",
-			responses: []mockResponse{
-				{http.StatusInternalServerError, `{"error": "occurred"}`},
-				{http.StatusOK, `{"message": "deleted"}`},
+			responses: []mockServerResponse{
+				mockResponse(http.StatusInternalServerError, `{"error": "occurred"}`),
+				mockResponse(http.StatusOK, `{"message": "deleted"}`),
 			},
 		},
 	} {
@@ -733,9 +746,21 @@ type testEntity struct {
 	Field string
 }
 
-type mockResponse struct {
+func mockResponses(statusCode int, body string) []mockServerResponse {
+	return []mockServerResponse{mockResponse(statusCode, body)}
+}
+
+func mockResponse(statusCode int, body string) mockServerResponse {
+	return mockServerResponse{
+		statusCode: statusCode,
+		body:       body,
+	}
+}
+
+type mockServerResponse struct {
 	statusCode int
 	body       string
+	header     map[string]string
 }
 
 type verifications struct {
@@ -749,7 +774,7 @@ type verifications struct {
 	authorization string
 }
 
-func testMockServer(responses []mockResponse) (http.Handler, *verifications) {
+func testMockServer(responses []mockServerResponse) (http.Handler, *verifications) {
 	v := &verifications{}
 	mux := http.NewServeMux()
 	i := 0
@@ -771,7 +796,10 @@ func testMockServer(responses []mockResponse) (http.Handler, *verifications) {
 			response := responses[current]
 			i++
 
-			w.Header().Set("Cache-Control", "max-age=3600")
+			for name, value := range response.header {
+				w.Header().Set(name, value)
+			}
+
 			w.WriteHeader(response.statusCode)
 			w.Write([]byte(response.body))
 		})
