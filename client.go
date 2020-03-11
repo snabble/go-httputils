@@ -17,7 +17,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/die-net/lrucache"
 	"github.com/ecosia/httpcache"
-	logging "github.com/snabble/go-logging"
+	logging "github.com/snabble/go-logging/v2"
 	"golang.org/x/oauth2"
 )
 
@@ -503,7 +503,7 @@ func (client *HTTPClient) do(req *Request) (err error) {
 func (client *HTTPClient) withBackoff(url string, maxRetries uint64, doRequest func() error) error {
 	notify := func(err error, duration time.Duration) {
 		if err != nil {
-			logging.Logger.WithError(err).Warnf("request failed to '%s', retry in %v", url, duration)
+			logging.Log.WithError(err).Warnf("request failed to '%s', retry in %v", url, duration)
 		}
 	}
 
