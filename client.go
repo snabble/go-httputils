@@ -3,6 +3,7 @@ package httputils
 import (
 	"bytes"
 	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -81,6 +82,13 @@ func ClientToken(token string) func(*Request) {
 func BearerAuth(token string) func(*Request) {
 	return func(req *Request) {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+func BasicAuth(username, password string) RequestParam {
+	return func(req *Request) {
+		auth := base64.StdEncoding.EncodeToString([]byte(username + ":" + password))
+		req.Header.Set("Authorization", "Basic "+auth)
 	}
 }
 
