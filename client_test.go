@@ -491,16 +491,45 @@ func Test_HTTPClient_Post_retriesOnConnectionError(t *testing.T) {
 }
 
 func Test_HTTPClient_PostForLocation(t *testing.T) {
-	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
+	handler, verify := testMockServer([]mockServerResponse{{
+		statusCode: http.StatusCreated,
+		body:       `{ "Field": "test"}`,
+		header:     map[string]string{"Location": "/location"},
+	}})
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	client := NewHTTPClient()
 	request := testEntity{Field: "send"}
 
-	err := client.Post(server.URL+"/", &request)
+	location, err := client.PostForLocation(server.URL+"/", &request)
 
 	assert.NoError(t, err)
+	assert.Equal(t, "/location", location)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
+	assert.Equal(t, "application/json", verify.contentType)
+	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
+}
+
+func Test_HTTPClient_PostForLocationAndBody(t *testing.T) {
+	handler, verify := testMockServer([]mockServerResponse{{
+		statusCode: http.StatusCreated,
+		body:       `{ "Field": "test"}`,
+		header:     map[string]string{"Location": "/location"},
+	}})
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+	var response testEntity
+
+	location, err := client.PostForLocationAndBody(server.URL+"/", &request, &response)
+
+	assert.NoError(t, err)
+	assert.Equal(t, "/location", location)
+	assert.Equal(t, testEntity{Field: "test"}, response)
 	assert.Equal(t, 1, verify.calls)
 	assert.Equal(t, http.MethodPost, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)

@@ -363,6 +363,39 @@ func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, p
 	return location, err
 }
 
+func (client *HTTPClient) PostForLocationAndBody(
+	url string,
+	requestBody interface{},
+	responseBody interface{},
+	params ...RequestParam,
+) (string, error) {
+	var location string
+
+	err := client.performWithRetries(
+		http.MethodPost,
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			decodeErr := resp.decodeBody(responseBody)
+
+			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+				return permanentHTTPError(resp)
+			}
+
+			if decodeErr != nil {
+				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			}
+
+			location = resp.RawResponse.Header.Get("Location")
+
+			return nil
+		},
+	)
+
+	return location, err
+}
+
 func (client *HTTPClient) Put(url string, requestBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPut,
