@@ -585,6 +585,25 @@ func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
 	assert.Equal(t, 2, server.calls)
 }
 
+func Test_HTTPClient_PutForBody(t *testing.T) {
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+	response := testEntity{}
+
+	err := client.PutForBody(server.URL+"/", &request, &response)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPut, verify.method)
+	assert.Equal(t, "application/json", verify.contentType)
+	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
+	assert.Equal(t, testEntity{Field: "test"}, response)
+}
+
 func Test_HTTPClient_Patch(t *testing.T) {
 	handler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
