@@ -415,6 +415,28 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 	)
 }
 
+func (client *HTTPClient) PutForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
+	return client.performWithRetries(
+		http.MethodPut,
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			decodeErr := resp.decodeBody(responseBody)
+
+			if !resp.isSuccessfulPost() {
+				return permanentHTTPError(resp)
+			}
+
+			if decodeErr != nil {
+				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			}
+
+			return nil
+		},
+	)
+}
+
 func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPatch,
