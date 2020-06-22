@@ -112,16 +112,16 @@ func (err HTTPClientError) Error() string {
 type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err error)
 
 type HTTPClientConfig struct {
-	timeout           time.Duration
-	tlsConfig         *tls.Config
-	maxRetriesGet     uint64
-	maxRetriesOther   uint64
-	cacheSize         uint64
-	token             string
-	username          string
-	password          string
-	oauth2TokenSource oauth2.TokenSource
-	logCall           CallLogger
+	timeout            time.Duration
+	tlsConfig          *tls.Config
+	createBackOffGet   func() backoff.BackOff
+	createBackOffOther func() backoff.BackOff
+	cacheSize          uint64
+	token              string
+	username           string
+	password           string
+	oauth2TokenSource  oauth2.TokenSource
+	logCall            CallLogger
 }
 
 type HTTPClientConfigOpt func(config *HTTPClientConfig)
@@ -140,13 +140,25 @@ func TLSConfig(tlsConfig *tls.Config) HTTPClientConfigOpt {
 
 func MaxRetries(retries uint64) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
-		config.maxRetriesGet = retries
-		config.maxRetriesOther = retries
+		config.createBackOffGet = func() backoff.BackOff { return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), retries) }
+		config.createBackOffOther = func() backoff.BackOff { return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), retries) }
 	}
 }
 
 func NoRetries() HTTPClientConfigOpt {
 	return MaxRetries(0)
+}
+
+func SetGetBackoffCreator(creator func() backoff.BackOff) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.createBackOffGet = creator
+	}
+}
+
+func SetOtherBackoffCreator(creator func() backoff.BackOff) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.createBackOffOther = creator
+	}
 }
 
 func CacheSize(size uint64) HTTPClientConfigOpt {
@@ -187,18 +199,18 @@ func LogCalls(logger CallLogger) HTTPClientConfigOpt {
 }
 
 var HTTPClientDefaultConfig = HTTPClientConfig{
-	timeout:         time.Second * 5,
-	maxRetriesGet:   3,
-	maxRetriesOther: 0,
-	cacheSize:       disableCache,
-	logCall:         func(r *http.Request, resp *http.Response, start time.Time, err error) {},
+	timeout:            time.Second * 5,
+	createBackOffGet:   func() backoff.BackOff { return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3) },
+	createBackOffOther: func() backoff.BackOff { return &backoff.StopBackOff{} },
+	cacheSize:          disableCache,
+	logCall:            func(r *http.Request, resp *http.Response, start time.Time, err error) {},
 }
 
 type HTTPClient struct {
-	wrapped         http.Client
-	maxRetriesGet   uint64
-	maxRetriesOther uint64
-	logCall         CallLogger
+	wrapped            http.Client
+	createBackOffGet   func() backoff.BackOff
+	createBackOffOther func() backoff.BackOff
+	logCall            CallLogger
 }
 
 func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
@@ -212,9 +224,9 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 			Timeout:   config.timeout,
 			Transport: selectTransport(config),
 		},
-		maxRetriesGet:   config.maxRetriesGet,
-		maxRetriesOther: config.maxRetriesOther,
-		logCall:         config.logCall,
+		createBackOffGet:   config.createBackOffGet,
+		createBackOffOther: config.createBackOffOther,
+		logCall:            config.logCall,
 	}
 }
 
@@ -261,9 +273,9 @@ func createTransport(config HTTPClientConfig) http.RoundTripper {
 }
 
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
-	return client.withBackoff(
+	return client.withBackOff(
 		url,
-		client.maxRetriesGet,
+		client.createBackOffGet(),
 		func() error {
 			var err error
 
@@ -502,9 +514,9 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 }
 
 func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
-	return client.withBackoff(
+	return client.withBackOff(
 		reqURL,
-		client.maxRetriesOther,
+		client.createBackOffOther(),
 		func() error {
 			resp, err := client.perform(method, reqURL, requestBody, params...)
 			if err, ok := err.(*url.Error); ok && err.Temporary() {
@@ -563,7 +575,7 @@ func (client *HTTPClient) do(req *Request) (err error) {
 	return nil
 }
 
-func (client *HTTPClient) withBackoff(url string, maxRetries uint64, doRequest func() error) error {
+func (client *HTTPClient) withBackOff(url string, b backoff.BackOff, doRequest func() error) error {
 	notify := func(err error, duration time.Duration) {
 		if err != nil {
 			logging.Log.WithError(err).Warnf("request failed to '%s', retry in %v", url, duration)
@@ -572,7 +584,7 @@ func (client *HTTPClient) withBackoff(url string, maxRetries uint64, doRequest f
 
 	return backoff.RetryNotify(
 		doRequest,
-		backoff.WithMaxRetries(backoff.NewExponentialBackOff(), maxRetries),
+		b,
 		notify,
 	)
 }
@@ -588,6 +600,7 @@ func (r Request) decodeBody(entity interface{}) error {
 	if err != nil {
 		return fmt.Errorf("reading response body: '%w'", err)
 	}
+
 	return r.Decode(data, entity)
 }
 
