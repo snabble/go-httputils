@@ -134,3 +134,15 @@ func UseRawDecoder() RequestParam {
 		},
 	)
 }
+
+func UseRawEncoder() RequestParam {
+	return SetEncoder(
+		func(v interface{}) ([]byte, error) {
+			s, ok := v.(string)
+			if !ok {
+				return nil, errors.New("raw encoder only encodes strings")
+			}
+			return []byte(s), nil
+		},
+	)
+}
