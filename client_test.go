@@ -131,6 +131,19 @@ func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
 	assert.Equal(t, "aField", testEntity.Field)
 }
 
+func Test_HTTPClient_Get_UseRawDecoder(t *testing.T) {
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `not json`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	var testEntity string
+	err := client.Get(server.URL+"/", &testEntity, UseRawDecoder())
+	require.NoError(t, err)
+	assert.Equal(t, "not json", testEntity)
+}
+
 func Test_HTTPClient_Get_LogCalls(t *testing.T) {
 	called := false
 
@@ -356,6 +369,22 @@ func Test_HTTPClient_PostForBody_SetEncoderAndDecoder(t *testing.T) {
 	assert.Equal(t, "plain", verify.contentType)
 	assert.Equal(t, "send", verify.body)
 	assert.Equal(t, testEntity{Field: "aField"}, response)
+}
+
+func Test_HTTPClient_PostForBody_UseRawEncoder(t *testing.T) {
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `not json`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+	request := "a body"
+
+	err := client.Post(server.URL+"/", request, UseRawEncoder(), ContentType("plain"))
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "plain", verify.contentType)
+	assert.Equal(t, "a body", verify.body)
 }
 
 func Test_HTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
