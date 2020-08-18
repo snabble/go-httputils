@@ -131,6 +131,19 @@ func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
 	assert.Equal(t, "aField", testEntity.Field)
 }
 
+func Test_HTTPClient_Get_UseRawDecoder(t *testing.T) {
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `not json`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	var testEntity string
+	err := client.Get(server.URL+"/", &testEntity, UseRawDecoder())
+	require.NoError(t, err)
+	assert.Equal(t, "not json", testEntity)
+}
+
 func Test_HTTPClient_Get_LogCalls(t *testing.T) {
 	called := false
 

@@ -3,6 +3,7 @@ package httputils
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -119,4 +120,17 @@ func ContentType(contentType string) RequestParam {
 	return func(req *Request) {
 		req.Header.Set("Content-Type", contentType)
 	}
+}
+
+func UseRawDecoder() RequestParam {
+	return SetDecoder(
+		func(b []byte, v interface{}) error {
+			s, ok := v.(*string)
+			if !ok {
+				return errors.New("raw decoder only accepts a *string as destination")
+			}
+			*s = string(b)
+			return nil
+		},
+	)
 }
