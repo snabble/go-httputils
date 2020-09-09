@@ -506,6 +506,25 @@ func Test_HTTPClient_Post_serverError(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Post_retriesOnTimeoutError(t *testing.T) {
+	calls := 0
+	server := httptest.NewServer(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) {
+			calls++
+			time.Sleep(50 * time.Millisecond)
+		},
+	))
+	defer server.Close()
+
+	client := NewHTTPClient(MaxRetries(1), Timeout(10*time.Millisecond))
+	request := testEntity{Field: "send"}
+
+	err := client.Post(server.URL, &request)
+
+	require.Error(t, err)
+	assert.Equal(t, 2, calls)
+}
+
 func Test_HTTPClient_Post_retriesOnConnectionError(t *testing.T) {
 	server := connectionClosingServer(t)
 	defer server.close()
