@@ -440,7 +440,8 @@ func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody 
 		client.createBackOffOther(),
 		func() error {
 			resp, err := client.perform(method, reqURL, requestBody, params...)
-			if err, ok := err.(*url.Error); ok && err.Temporary() {
+			urlErr := &url.Error{}
+			if errors.As(err, &urlErr) && (urlErr.Temporary() || urlErr.Timeout()) {
 				return err
 			}
 			var syscallErr *os.SyscallError
