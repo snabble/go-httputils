@@ -306,6 +306,20 @@ func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
 	assert.Equal(t, testEntity{Field: "test"}, entity)
 }
 
+func Test_HTTPClient_Head(t *testing.T) {
+	handler, verify := testMockServer(mockResponses(http.StatusOK, ``))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	err := client.Head(server.URL + "/")
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodHead, verify.method)
+}
+
 func Test_HTTPClient_PostForBody(t *testing.T) {
 	handler, verify := testMockServer(mockResponses(http.StatusCreated, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)
