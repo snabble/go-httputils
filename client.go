@@ -193,6 +193,38 @@ func createTransport(config HTTPClientConfig) http.RoundTripper {
 	}
 }
 
+func (client *HTTPClient) Head(url string, params ...RequestParam) error {
+	return client.withBackOff(
+		url,
+		client.createBackOffGet(),
+		func() error {
+			var err error
+
+			req := defaultRequest()
+			applyParams(req, params)
+
+			req.RawRequest, err = http.NewRequest(http.MethodHead, url, nil)
+			if err != nil {
+				return wrapErrorF(err, "invalid url %v", url)
+			}
+
+			if err := client.do(req); err != nil {
+				return err
+			}
+
+			if req.isClientError() {
+				return permanentHTTPError(req)
+			}
+
+			if req.RawResponse.StatusCode != http.StatusOK {
+				return httpError(req)
+			}
+
+			return nil
+		},
+	)
+}
+
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
 	return client.withBackOff(
 		url,
@@ -214,7 +246,7 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 
 			decodeErr := req.decodeBody(entity)
 
-			if http.StatusBadRequest <= req.RawResponse.StatusCode && req.RawResponse.StatusCode < http.StatusInternalServerError {
+			if req.isClientError() {
 				return permanentHTTPError(req)
 			}
 

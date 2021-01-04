@@ -48,6 +48,11 @@ func (req *Request) isSuccessfulPost() bool {
 	return req.RawResponse.StatusCode == http.StatusOK || req.RawResponse.StatusCode == http.StatusCreated
 }
 
+func (req *Request) isClientError() bool {
+	return http.StatusBadRequest <= req.RawResponse.StatusCode &&
+		req.RawResponse.StatusCode < http.StatusInternalServerError
+}
+
 func (req Request) decodeBody(entity interface{}) error {
 	data, err := ioutil.ReadAll(req.RawResponse.Body)
 	if err != nil {
