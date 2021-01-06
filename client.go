@@ -193,7 +193,25 @@ func createTransport(config HTTPClientConfig) http.RoundTripper {
 	}
 }
 
+func (client *HTTPClient) Head(url string, params ...RequestParam) error {
+	return client.perform(
+		http.MethodHead,
+		url,
+		nil,
+		append(params, SetDecoder(func([]byte, interface{}) error { return nil }))...,
+	)
+}
+
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
+	return client.perform(
+		http.MethodGet,
+		url,
+		entity,
+		params...,
+	)
+}
+
+func (client *HTTPClient) perform(method, url string, entity interface{}, params ...RequestParam) error {
 	return client.withBackOff(
 		url,
 		client.createBackOffGet(),
@@ -203,7 +221,7 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 			req := defaultRequest()
 			applyParams(req, params)
 
-			req.RawRequest, err = http.NewRequest(http.MethodGet, url, nil)
+			req.RawRequest, err = http.NewRequest(method, url, nil)
 			if err != nil {
 				return wrapErrorF(err, "invalid url %v", url)
 			}
@@ -214,7 +232,7 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 
 			decodeErr := req.decodeBody(entity)
 
-			if http.StatusBadRequest <= req.RawResponse.StatusCode && req.RawResponse.StatusCode < http.StatusInternalServerError {
+			if req.isClientError() {
 				return permanentHTTPError(req)
 			}
 
@@ -439,7 +457,7 @@ func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody 
 		reqURL,
 		client.createBackOffOther(),
 		func() error {
-			resp, err := client.perform(method, reqURL, requestBody, params...)
+			resp, err := client.performWithBody(method, reqURL, requestBody, params...)
 			urlErr := &url.Error{}
 			if errors.As(err, &urlErr) && (urlErr.Temporary() || urlErr.Timeout()) {
 				return err
@@ -461,7 +479,7 @@ func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody 
 	)
 }
 
-func (client *HTTPClient) perform(method, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
+func (client *HTTPClient) performWithBody(method, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
 	req := defaultRequest()
 	applyParams(req, params)
 
