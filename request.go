@@ -130,11 +130,14 @@ func ContentType(contentType string) RequestParam {
 func UseRawDecoder() RequestParam {
 	return SetDecoder(
 		func(b []byte, v interface{}) error {
-			s, ok := v.(*string)
-			if !ok {
-				return errors.New("raw decoder only accepts a *string as destination")
+			switch s := v.(type) {
+			case *string:
+				*s = string(b)
+			case *[]byte:
+				*s = b
+			default:
+				return errors.New("raw decoder only accepts *string and *[]byte as destinations")
 			}
-			*s = string(b)
 			return nil
 		},
 	)
@@ -143,11 +146,14 @@ func UseRawDecoder() RequestParam {
 func UseRawEncoder() RequestParam {
 	return SetEncoder(
 		func(v interface{}) ([]byte, error) {
-			s, ok := v.(string)
-			if !ok {
-				return nil, errors.New("raw encoder only encodes strings")
+			switch s := v.(type) {
+			case string:
+				return []byte(s), nil
+			case []byte:
+				return s, nil
+			default:
+				return nil, errors.New("raw encoder only encodes strings and []byte")
 			}
-			return []byte(s), nil
 		},
 	)
 }

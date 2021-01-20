@@ -131,7 +131,7 @@ func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
 	assert.Equal(t, "aField", testEntity.Field)
 }
 
-func Test_HTTPClient_Get_UseRawDecoder(t *testing.T) {
+func Test_HTTPClient_Get_UseRawDecoder_string(t *testing.T) {
 	handler, _ := testMockServer(mockResponses(http.StatusOK, `not json`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
@@ -142,6 +142,20 @@ func Test_HTTPClient_Get_UseRawDecoder(t *testing.T) {
 	err := client.Get(server.URL+"/", &testEntity, UseRawDecoder())
 	require.NoError(t, err)
 	assert.Equal(t, "not json", testEntity)
+}
+
+func Test_HTTPClient_Get_UseRawDecoder_byteSlice(t *testing.T) {
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `not json`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	var testEntity []byte
+	err := client.Get(server.URL+"/", &testEntity, UseRawDecoder())
+
+	require.NoError(t, err)
+	assert.Equal(t, []byte("not json"), testEntity)
 }
 
 func Test_HTTPClient_Get_LogCalls(t *testing.T) {
@@ -385,13 +399,29 @@ func Test_HTTPClient_PostForBody_SetEncoderAndDecoder(t *testing.T) {
 	assert.Equal(t, testEntity{Field: "aField"}, response)
 }
 
-func Test_HTTPClient_PostForBody_UseRawEncoder(t *testing.T) {
+func Test_HTTPClient_PostForBody_UseRawEncoder_string(t *testing.T) {
 	handler, verify := testMockServer(mockResponses(http.StatusCreated, `not json`))
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
 	client := NewHTTPClient()
 	request := "a body"
+
+	err := client.Post(server.URL+"/", request, UseRawEncoder(), ContentType("plain"))
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "plain", verify.contentType)
+	assert.Equal(t, "a body", verify.body)
+}
+
+func Test_HTTPClient_PostForBody_UseRawEncoder_byteSlice(t *testing.T) {
+	handler, verify := testMockServer(mockResponses(http.StatusCreated, `not json`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	client := NewHTTPClient()
+	request := []byte("a body")
 
 	err := client.Post(server.URL+"/", request, UseRawEncoder(), ContentType("plain"))
 
