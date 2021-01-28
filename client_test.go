@@ -76,6 +76,38 @@ func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
 	assert.Equal(t, 1, verify.calls)
 }
 
+func Test_HTTPClient_Get_BaseURL(t *testing.T) {
+	handler, _ := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+	otherHandler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "other"}`))
+	otherServer := httptest.NewServer(otherHandler)
+	defer otherServer.Close()
+
+	client := NewHTTPClient(BaseURL(server.URL + "/dir"))
+	entity := testEntity{}
+
+	t.Run("it appends base url if absolute path is used", func(t *testing.T) {
+		err := client.Get("/", &entity)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("it appends base url if relative path is used", func(t *testing.T) {
+		err := client.Get("../", &entity)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("it uses absolute url", func(t *testing.T) {
+		err := client.Get(otherServer.URL, &entity)
+
+		require.NoError(t, err)
+		assert.Equal(t, entity.Field, "other")
+		assert.Equal(t, verify.calls, 1)
+	})
+}
+
 func Test_HTTPClient_Get_UserAgent(t *testing.T) {
 	handler, verify := testMockServer(mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	server := httptest.NewServer(handler)

@@ -1,9 +1,9 @@
 package httputils
 
 import (
-	"bytes"
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -34,6 +34,7 @@ type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err 
 
 type HTTPClientConfig struct {
 	timeout            time.Duration
+	baseURL            string
 	tlsConfig          *tls.Config
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
@@ -68,6 +69,12 @@ func MaxRetries(retries uint64) HTTPClientConfigOpt {
 
 func NoRetries() HTTPClientConfigOpt {
 	return MaxRetries(0)
+}
+
+func BaseURL(url string) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.baseURL = url
+	}
 }
 
 func SetGetBackoffCreator(creator func() backoff.BackOff) HTTPClientConfigOpt {
@@ -128,6 +135,7 @@ var HTTPClientDefaultConfig = HTTPClientConfig{
 }
 
 type HTTPClient struct {
+	baseURL            string
 	wrapped            http.Client
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
@@ -145,6 +153,7 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 			Timeout:   config.timeout,
 			Transport: selectTransport(config),
 		},
+		baseURL:            config.baseURL,
 		createBackOffGet:   config.createBackOffGet,
 		createBackOffOther: config.createBackOffOther,
 		logCall:            config.logCall,
@@ -216,14 +225,14 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 		url,
 		client.createBackOffGet(),
 		func() error {
-			var err error
-
-			req := defaultRequest()
-			applyParams(req, params)
-
-			req.RawRequest, err = http.NewRequest(method, url, nil)
+			resolvedURL, err := client.resolveURL(url)
 			if err != nil {
-				return wrapErrorF(err, "invalid url %v", url)
+				return err
+			}
+
+			req, err := createRequest(method, resolvedURL, params, nil)
+			if err != nil {
+				return err
 			}
 
 			if err := client.do(req); err != nil {
@@ -480,17 +489,14 @@ func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody 
 }
 
 func (client *HTTPClient) performWithBody(method, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
-	req := defaultRequest()
-	applyParams(req, params)
-
-	data, err := req.Encode(requestBody)
+	resolvedURL, err := client.resolveURL(url)
 	if err != nil {
-		return nil, wrapError(err, "marshalling entity")
+		return nil, err
 	}
 
-	req.RawRequest, err = http.NewRequest(method, url, bytes.NewBuffer(data))
+	req, err := createRequest(method, resolvedURL, params, requestBody)
 	if err != nil {
-		return nil, wrapErrorF(err, "invalid url %v", url)
+		return nil, err
 	}
 
 	if err := client.do(req); err != nil {
@@ -513,6 +519,27 @@ func (client *HTTPClient) do(req *Request) (err error) {
 	}
 
 	return nil
+}
+
+func (client *HTTPClient) resolveURL(refString string) (string, error) {
+	if client.baseURL == "" {
+		return refString, nil
+	}
+
+	ref, err := url.Parse(refString)
+	if err != nil {
+		return "", fmt.Errorf("invalid url '%s': %w", refString, err)
+	}
+	if ref.IsAbs() {
+		return refString, nil
+	}
+
+	base, err := url.Parse(client.baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid base url '%s': %w", client.baseURL, err)
+	}
+
+	return base.ResolveReference(ref).String(), nil
 }
 
 func (client *HTTPClient) withBackOff(url string, b backoff.BackOff, doRequest func() error) error {
