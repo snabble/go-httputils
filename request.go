@@ -1,10 +1,12 @@
 package httputils
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 
@@ -24,16 +26,51 @@ type Request struct {
 	RawResponse *http.Response
 }
 
-func defaultRequest() *Request {
+func createRequest(method, url string, params []RequestParam, requestBody interface{}) (*Request, error) {
+	request := newRequest(params)
+
+	if err := request.createRaw(method, url, requestBody); err != nil {
+		return nil, err
+	}
+
+	return request, nil
+}
+
+func newRequest(params []RequestParam) *Request {
 	header := http.Header{}
 	header.Add("Content-Type", "application/json")
 
-	return &Request{
+	request := &Request{
 		Header: header,
 
 		Encode: json.Marshal,
 		Decode: json.Unmarshal,
 	}
+
+	applyParams(request, params)
+
+	return request
+}
+
+func (req *Request) createRaw(method, url string, requestBody interface{}) error {
+	var data io.Reader
+	if requestBody != nil {
+		body, err := req.Encode(requestBody)
+		if err != nil {
+			return wrapError(err, "marshalling entity")
+		}
+
+		data = bytes.NewBuffer(body)
+	}
+
+	raw, err := http.NewRequest(method, url, data)
+	if err != nil {
+		return wrapErrorF(err, "invalid url %v", url)
+	}
+
+	req.RawRequest = raw
+
+	return nil
 }
 
 func (req *Request) applyHeader() {
