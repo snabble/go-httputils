@@ -82,7 +82,9 @@ func (req *Request) applyHeader() {
 }
 
 func (req *Request) isSuccessfulPost() bool {
-	return req.RawResponse.StatusCode == http.StatusOK || req.RawResponse.StatusCode == http.StatusCreated
+	return req.RawResponse.StatusCode == http.StatusOK ||
+		req.RawResponse.StatusCode == http.StatusCreated ||
+		req.RawResponse.StatusCode == http.StatusNoContent
 }
 
 func (req *Request) isClientError() bool {
