@@ -267,7 +267,7 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 		func(resp *Request) error {
 			decodeErr := resp.decodeBody(responseBody)
 
-			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
@@ -339,7 +339,7 @@ func (client *HTTPClient) PostForLocationAndBody(
 		func(resp *Request) error {
 			decodeErr := resp.decodeBody(responseBody)
 
-			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
@@ -384,7 +384,7 @@ func (client *HTTPClient) PutForBody(url string, requestBody interface{}, respon
 		func(resp *Request) error {
 			decodeErr := resp.decodeBody(responseBody)
 
-			if !resp.isSuccessfulPost() {
+			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
@@ -407,7 +407,7 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 			// Read all additional bytes from the body
 			defer ioutil.ReadAll(resp.RawResponse.Body)
 
-			if resp.RawResponse.StatusCode != http.StatusOK {
+			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
 
@@ -425,7 +425,7 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 		func(resp *Request) error {
 			decodeErr := resp.decodeBody(responseBody)
 
-			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusCreated {
+			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 

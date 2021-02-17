@@ -87,6 +87,11 @@ func (req *Request) isSuccessfulPost() bool {
 		req.RawResponse.StatusCode == http.StatusNoContent
 }
 
+func (req *Request) isSuccessfulPostForBody() bool {
+	return req.RawResponse.StatusCode == http.StatusOK ||
+		req.RawResponse.StatusCode == http.StatusCreated
+}
+
 func (req *Request) isClientError() bool {
 	return http.StatusBadRequest <= req.RawResponse.StatusCode &&
 		req.RawResponse.StatusCode < http.StatusInternalServerError

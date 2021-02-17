@@ -697,7 +697,7 @@ func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
 }
 
 func Test_HTTPClient_PatchForBody(t *testing.T) {
-	server, verify := testMockServer(t, mockResponses(http.StatusCreated, `{ "Field": "test"}`))
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	client := NewHTTPClient()
 	request := testEntity{Field: "send"}
 	response := testEntity{}
