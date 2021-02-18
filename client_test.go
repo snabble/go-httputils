@@ -483,6 +483,16 @@ func Test_HTTPClient_Post(t *testing.T) {
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 }
 
+func Test_HTTPClient_Post_AcceptsNoContent(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusNoContent, `{ "Field": "test"}`))
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+
+	err := client.Post(server.URL+"/", &request)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+}
+
 func Test_HTTPClient_Post_clientError(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusBadRequest, ``))
 	client := NewHTTPClient()
@@ -687,7 +697,7 @@ func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
 }
 
 func Test_HTTPClient_PatchForBody(t *testing.T) {
-	server, verify := testMockServer(t, mockResponses(http.StatusCreated, `{ "Field": "test"}`))
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	client := NewHTTPClient()
 	request := testEntity{Field: "send"}
 	response := testEntity{}
