@@ -38,6 +38,7 @@ type HTTPClientConfig struct {
 	tlsConfig          *tls.Config
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
+	retryPredicate     func(req *Request, err error) bool
 	cacheSize          uint64
 	token              string
 	username           string
@@ -69,6 +70,15 @@ func MaxRetries(retries uint64) HTTPClientConfigOpt {
 
 func NoRetries() HTTPClientConfigOpt {
 	return MaxRetries(0)
+}
+
+// RetryPredicate adds a facility to vote whether a request should be retried or not.
+// fn should return true when a retry should be executed. The implementor has to read the
+// body from the req parameter if needed.
+func RetryPredicate(fn func(req *Request, err error) bool) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.retryPredicate = fn
+	}
 }
 
 func BaseURL(url string) HTTPClientConfigOpt {
@@ -130,6 +140,7 @@ var HTTPClientDefaultConfig = HTTPClientConfig{
 	timeout:            time.Second * 5,
 	createBackOffGet:   func() backoff.BackOff { return backoff.WithMaxRetries(backoff.NewExponentialBackOff(), 3) },
 	createBackOffOther: func() backoff.BackOff { return &backoff.StopBackOff{} },
+	retryPredicate:     func(req *Request, err error) bool { return true },
 	cacheSize:          disableCache,
 	logCall:            func(r *http.Request, resp *http.Response, start time.Time, err error) {},
 }
@@ -139,6 +150,7 @@ type HTTPClient struct {
 	wrapped            http.Client
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
+	retryPredicate     func(req *Request, err error) bool
 	logCall            CallLogger
 }
 
@@ -156,6 +168,7 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 		baseURL:            config.baseURL,
 		createBackOffGet:   config.createBackOffGet,
 		createBackOffOther: config.createBackOffOther,
+		retryPredicate:     config.retryPredicate,
 		logCall:            config.logCall,
 	}
 }
@@ -237,6 +250,11 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 
 			if err := client.do(req); err != nil {
 				return err
+			}
+			defer req.RawResponse.Body.Close()
+
+			if !client.retryPredicate(req, err) {
+				return permanentHTTPError(req)
 			}
 
 			decodeErr := req.decodeBody(entity)

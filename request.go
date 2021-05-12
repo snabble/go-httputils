@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/cenkalti/backoff/v4"
@@ -98,11 +97,10 @@ func (req *Request) isClientError() bool {
 }
 
 func (req Request) decodeBody(entity interface{}) error {
-	data, err := ioutil.ReadAll(req.RawResponse.Body)
+	data, err := io.ReadAll(req.RawResponse.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: '%w'", err)
 	}
-
 	return req.Decode(data, entity)
 }
 

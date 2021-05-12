@@ -3,6 +3,7 @@ package httputils
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -31,7 +32,7 @@ func Test_HTTPClient_Get(t *testing.T) {
 		{
 			name: "success after retry",
 			responses: []mockServerResponse{
-				mockResponse(http.StatusInternalServerError, ``),
+				mockResponse(http.StatusInternalServerError, `<html><body>error</body></html>`),
 				mockResponse(http.StatusOK, `{ "Field": "test"}`),
 			},
 			expected: testEntity{Field: "test"},
@@ -70,6 +71,33 @@ func Test_HTTPClient_Get_DoesNotRetry(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
+}
+
+func Test_HTTPClient_Get_WithRetryPredicate(t *testing.T) {
+	serverA, verifyA := testMockServer(t, mockResponses(http.StatusInternalServerError, "ERROR"))
+	serverB, verifyB := testMockServer(t, mockResponses(http.StatusInternalServerError, "RETRYABLE_ERROR"))
+
+	client := NewHTTPClient(
+		RetryPredicate(func(req *Request, err error) bool {
+			body, _ := io.ReadAll(req.RawResponse.Body)
+			return !(string(body) == "ERROR" && !req.isClientError())
+		}),
+		MaxRetries(1),
+	)
+	entity := testEntity{}
+
+	t.Run("does not retry", func(t *testing.T) {
+		err := client.Get(serverA.URL+"/", &entity)
+		require.Error(t, err)
+		assert.Equal(t, 1, verifyA.calls)
+	})
+
+	t.Run("does retry", func(t *testing.T) {
+		err := client.Get(serverB.URL+"/", &entity)
+		require.Error(t, err)
+		assert.Equal(t, 2, verifyB.calls)
+	})
+
 }
 
 func Test_HTTPClient_Get_BaseURL(t *testing.T) {
