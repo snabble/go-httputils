@@ -72,7 +72,7 @@ func NoRetries() HTTPClientConfigOpt {
 	return MaxRetries(0)
 }
 
-// RetryPredicate adds a facility to vote whether a request should be retried or not.
+// RetryPredicate adds a facility to decide whether a request should be retried or not.
 // fn should return true when a retry should be executed. The implementor has to read the
 // body from the req parameter if needed.
 func RetryPredicate(fn func(req *Request, err error) bool) HTTPClientConfigOpt {
