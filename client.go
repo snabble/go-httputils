@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,7 +14,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/die-net/lrucache"
 	"github.com/ecosia/httpcache"
-	logging "github.com/snabble/go-logging/v2"
+	"github.com/snabble/go-logging/v2"
 	"golang.org/x/oauth2"
 )
 
@@ -31,6 +30,7 @@ func (err HTTPClientError) Error() string {
 }
 
 type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err error)
+type RetryPredicate func(req *Request, err error) bool
 
 type HTTPClientConfig struct {
 	timeout            time.Duration
@@ -38,7 +38,7 @@ type HTTPClientConfig struct {
 	tlsConfig          *tls.Config
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
-	retryPredicate     func(req *Request, err error) bool
+	retryPredicate     RetryPredicate
 	cacheSize          uint64
 	token              string
 	username           string
@@ -72,12 +72,11 @@ func NoRetries() HTTPClientConfigOpt {
 	return MaxRetries(0)
 }
 
-// RetryPredicate adds a facility to decide whether a request should be retried or not.
-// fn should return true when a retry should be executed. The implementor has to read the
-// body from the req parameter if needed.
-func RetryPredicate(fn func(req *Request, err error) bool) HTTPClientConfigOpt {
+// SetRetryPredicate adds a facility to decide whether a request should be retried or not.
+// predicate should return true when a retry should be executed.
+func SetRetryPredicate(predicate RetryPredicate) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
-		config.retryPredicate = fn
+		config.retryPredicate = predicate
 	}
 }
 
@@ -150,7 +149,7 @@ type HTTPClient struct {
 	wrapped            http.Client
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
-	retryPredicate     func(req *Request, err error) bool
+	retryPredicate     RetryPredicate
 	logCall            CallLogger
 }
 
@@ -251,23 +250,25 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 			if err := client.do(req); err != nil {
 				return err
 			}
-			defer req.RawResponse.Body.Close()
-
-			if !client.retryPredicate(req, err) {
-				return permanentHTTPError(req)
-			}
 
 			decodeErr := req.decodeBody(entity)
 
-			if req.isClientError() {
+			if req.isClientError() || req.Response.StatusCode() == http.StatusNotModified {
 				return permanentHTTPError(req)
 			}
 
-			if req.RawResponse.StatusCode != http.StatusOK {
+			// Handle only 200 OK on purpose as, redirects are already handled by the client.
+			if req.Response.StatusCode() != http.StatusOK {
+				if !client.retryPredicate(req, err) {
+					return permanentHTTPError(req)
+				}
 				return httpError(req)
 			}
 
 			if decodeErr != nil {
+				if !client.retryPredicate(req, decodeErr) {
+					return backoff.Permanent(wrapError(decodeErr, "decoding response body"))
+				}
 				return wrapError(decodeErr, "decoding response body")
 			}
 
@@ -305,13 +306,9 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 		requestBody,
 		params,
 		func(resp *Request) error {
-			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
-
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
-
 			return nil
 		},
 	)
@@ -325,14 +322,11 @@ func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, p
 		requestBody,
 		params,
 		func(resp *Request) error {
-			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
-
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
 
-			location = resp.RawResponse.Header.Get("Location")
+			location = resp.Response.Header().Get("Location")
 
 			return nil
 		},
@@ -365,7 +359,7 @@ func (client *HTTPClient) PostForLocationAndBody(
 				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
 			}
 
-			location = resp.RawResponse.Header.Get("Location")
+			location = resp.Response.Header().Get("Location")
 
 			return nil
 		},
@@ -381,9 +375,6 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 		requestBody,
 		params,
 		func(resp *Request) error {
-			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
-
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
@@ -422,9 +413,6 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 		requestBody,
 		params,
 		func(resp *Request) error {
-			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
-
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
 			}
@@ -463,14 +451,11 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 		nil,
 		params,
 		func(resp *Request) error {
-			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
-
-			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
+			if http.StatusBadRequest <= resp.Response.StatusCode() && resp.Response.StatusCode() < http.StatusInternalServerError {
 				return permanentHTTPError(resp)
 			}
 
-			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusNoContent && resp.RawResponse.StatusCode != http.StatusAccepted {
+			if resp.Response.StatusCode() != http.StatusOK && resp.Response.StatusCode() != http.StatusNoContent && resp.Response.StatusCode() != http.StatusAccepted {
 				return httpError(resp)
 			}
 
@@ -499,8 +484,7 @@ func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody 
 			if err != nil {
 				return backoff.Permanent(err)
 			}
-			defer resp.RawResponse.Body.Close()
-
+			defer resp.Response.Close()
 			return handleResponse(resp)
 		},
 	)
@@ -528,9 +512,9 @@ func (client *HTTPClient) do(req *Request) (err error) {
 
 	start := time.Now()
 
-	req.RawResponse, err = client.wrapped.Do(req.RawRequest)
+	req.Response.raw, err = client.wrapped.Do(req.RawRequest)
 
-	client.logCall(req.RawRequest, req.RawResponse, start, err)
+	client.logCall(req.RawRequest, req.Response.raw, start, err)
 
 	if err != nil {
 		return wrapErrorF(err, "request failed %v", req.RawRequest.URL.String())

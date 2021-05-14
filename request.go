@@ -21,8 +21,25 @@ type Request struct {
 	Header     http.Header
 	Encode     Encoder
 
-	Decode      Decoder
-	RawResponse *http.Response
+	Decode   Decoder
+	Response Response
+}
+
+type Response struct {
+	body []byte
+	raw  *http.Response
+}
+
+func (resp *Response) Header() http.Header {
+	return resp.raw.Header
+}
+
+func (resp *Response) StatusCode() int {
+	return resp.raw.StatusCode
+}
+
+func (resp *Response) Status() string {
+	return resp.raw.Status
 }
 
 func createRequest(method, url string, params []RequestParam, requestBody interface{}) (*Request, error) {
@@ -81,27 +98,52 @@ func (req *Request) applyHeader() {
 }
 
 func (req *Request) isSuccessfulPost() bool {
-	return req.RawResponse.StatusCode == http.StatusOK ||
-		req.RawResponse.StatusCode == http.StatusCreated ||
-		req.RawResponse.StatusCode == http.StatusNoContent
+	return req.Response.StatusCode() == http.StatusOK ||
+		req.Response.StatusCode() == http.StatusCreated ||
+		req.Response.StatusCode() == http.StatusNoContent
 }
 
 func (req *Request) isSuccessfulPostForBody() bool {
-	return req.RawResponse.StatusCode == http.StatusOK ||
-		req.RawResponse.StatusCode == http.StatusCreated
+	return req.Response.StatusCode() == http.StatusOK ||
+		req.Response.StatusCode() == http.StatusCreated
 }
 
 func (req *Request) isClientError() bool {
-	return http.StatusBadRequest <= req.RawResponse.StatusCode &&
-		req.RawResponse.StatusCode < http.StatusInternalServerError
+	return http.StatusBadRequest <= req.Response.StatusCode() &&
+		req.Response.StatusCode() < http.StatusInternalServerError
 }
 
-func (req Request) decodeBody(entity interface{}) error {
-	data, err := io.ReadAll(req.RawResponse.Body)
+// decodeBody reads the request body and tries to decode the resulting []byte.
+func (req *Request) decodeBody(entity interface{}) error {
+	body, err := req.Response.Body()
 	if err != nil {
-		return fmt.Errorf("reading response body: '%w'", err)
+		return err
 	}
-	return req.Decode(data, entity)
+	return req.Decode(body, entity)
+}
+
+func (resp *Response) Close() error {
+	if resp.body != nil {
+		return nil
+	}
+	_, err := io.Copy(io.Discard, resp.raw.Body)
+	_ = resp.raw.Body.Close()
+	return err
+}
+
+func (resp *Response) Body() ([]byte, error) {
+	if resp.body != nil {
+		return resp.body, nil
+	}
+
+	data, err := io.ReadAll(resp.raw.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: '%w'", err)
+	}
+	_ = resp.raw.Body.Close()
+
+	resp.body = data
+	return data, nil
 }
 
 func applyParams(req *Request, params []RequestParam) {
@@ -115,7 +157,7 @@ func permanentHTTPError(resp *Request) error {
 }
 
 func httpError(resp *Request) error {
-	return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
+	return HTTPClientError{Code: resp.Response.StatusCode(), Status: resp.Response.Status()}
 }
 
 type RequestParam func(*Request)

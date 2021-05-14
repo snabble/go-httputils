@@ -3,7 +3,6 @@ package httputils
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -22,6 +21,13 @@ func Test_HTTPClient_Get(t *testing.T) {
 		responses []mockServerResponse
 		expected  testEntity
 	}{
+		{
+			name: "success",
+			responses: []mockServerResponse{
+				mockResponse(http.StatusOK, `{ "Field": "test"}`),
+			},
+			expected: testEntity{Field: "test"},
+		},
 		{
 			name: "success",
 			responses: []mockServerResponse{
@@ -78,8 +84,8 @@ func Test_HTTPClient_Get_WithRetryPredicate(t *testing.T) {
 	serverB, verifyB := testMockServer(t, mockResponses(http.StatusInternalServerError, "RETRYABLE_ERROR"))
 
 	client := NewHTTPClient(
-		RetryPredicate(func(req *Request, err error) bool {
-			body, _ := io.ReadAll(req.RawResponse.Body)
+		SetRetryPredicate(func(req *Request, err error) bool {
+			body, _ := req.Response.Body()
 			return !(string(body) == "ERROR" && !req.isClientError())
 		}),
 		MaxRetries(1),
