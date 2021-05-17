@@ -238,10 +238,10 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 			if err := client.do(req); err != nil {
 				return err
 			}
-
+			defer req.RawResponse.Body.Close()
 			decodeErr := req.decodeBody(entity)
 
-			if req.isClientError() {
+			if req.isClientError() || req.RawResponse.StatusCode == http.StatusNotModified {
 				return permanentHTTPError(req)
 			}
 
