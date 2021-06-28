@@ -1,8 +1,10 @@
 package httputils
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -314,6 +316,26 @@ func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
 	assert.Equal(t, testEntity{Field: "test"}, entity)
 }
 
+func Test_HTTPClient_Get_Context(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) {
+			time.Sleep(200 * time.Millisecond)
+		},
+	))
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err := client.Get(server.URL, &testEntity{}, Context(ctx))
+	require.True(t, errors.Is(err, context.Canceled))
+}
+
 func Test_HTTPClient_Head(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusOK, ``))
 
@@ -595,6 +617,26 @@ func Test_HTTPClient_PostForLocationAndBody(t *testing.T) {
 	assert.Equal(t, http.MethodPost, verify.method)
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
+}
+
+func Test_HTTPClient_Post_Context(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) {
+			time.Sleep(200 * time.Millisecond)
+		},
+	))
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		cancel()
+	}()
+
+	err := client.Post(server.URL, &testEntity{}, Context(ctx))
+	require.True(t, errors.Is(err, context.Canceled))
 }
 
 func Test_HTTPClient_Put(t *testing.T) {
