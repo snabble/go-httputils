@@ -2,6 +2,7 @@ package httputils
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -21,6 +22,7 @@ type Request struct {
 	RawRequest *http.Request
 	Header     http.Header
 	Encode     Encoder
+	ctx        context.Context
 
 	Decode      Decoder
 	RawResponse *http.Response
@@ -42,6 +44,7 @@ func newRequest(params []RequestParam) *Request {
 
 	request := &Request{
 		Header: header,
+		ctx:    context.Background(),
 
 		Encode: json.Marshal,
 		Decode: json.Unmarshal,
@@ -63,7 +66,7 @@ func (req *Request) createRaw(method, url string, requestBody interface{}) error
 		data = bytes.NewBuffer(body)
 	}
 
-	raw, err := http.NewRequest(method, url, data)
+	raw, err := http.NewRequestWithContext(req.ctx, method, url, data)
 	if err != nil {
 		return wrapErrorF(err, "invalid url %v", url)
 	}
@@ -121,6 +124,12 @@ func httpError(resp *Request) error {
 }
 
 type RequestParam func(*Request)
+
+func Context(ctx context.Context) RequestParam {
+	return func(req *Request) {
+		req.ctx = ctx
+	}
+}
 
 func SetEncoder(e Encoder) RequestParam {
 	return func(req *Request) {
