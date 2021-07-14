@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -135,6 +136,40 @@ func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "token", verify.token)
+}
+
+func Test_HTTPClient_Get_SetStreamDecoder(t *testing.T) {
+	server, _ := testMockServer(t, mockResponses(http.StatusOK, `value`))
+	client := NewHTTPClient()
+	entity := testEntity{}
+	var errReading error
+	var body []byte
+
+	err := client.Get(
+		server.URL+"/",
+		&entity,
+		SetStreamDecoder(func(r io.Reader, i interface{}) error {
+			body, errReading = ioutil.ReadAll(r)
+
+			entity, ok := i.(*testEntity)
+			require.True(t, ok)
+
+			entity.Field = "value"
+
+			return nil
+		}),
+	)
+
+	require.NoError(t, err)
+
+	t.Run("it passed the body to the decoder", func(t *testing.T) {
+		assert.NoError(t, errReading)
+		assert.Equal(t, []byte(`value`), body)
+	})
+
+	t.Run("it updated the entity", func(t *testing.T) {
+		assert.Equal(t, "value", entity.Field)
+	})
 }
 
 func Test_HTTPClient_Get_SetDecoder(t *testing.T) {
