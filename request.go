@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 
 	"github.com/cenkalti/backoff/v4"
@@ -16,6 +15,7 @@ import (
 
 type Encoder func(interface{}) ([]byte, error)
 
+type StreamDecoder func(io.Reader, interface{}) error
 type Decoder func([]byte, interface{}) error
 
 type Request struct {
@@ -24,8 +24,9 @@ type Request struct {
 	Encode     Encoder
 	ctx        context.Context
 
-	Decode      Decoder
-	RawResponse *http.Response
+	StreamDecoder StreamDecoder
+	Decode        Decoder
+	RawResponse   *http.Response
 }
 
 func createRequest(method, url string, params []RequestParam, requestBody interface{}) (*Request, error) {
@@ -101,7 +102,11 @@ func (req *Request) isClientError() bool {
 }
 
 func (req Request) decodeBody(entity interface{}) error {
-	data, err := ioutil.ReadAll(req.RawResponse.Body)
+	if req.StreamDecoder != nil {
+		return req.StreamDecoder(req.RawResponse.Body, entity)
+	}
+
+	data, err := io.ReadAll(req.RawResponse.Body)
 	if err != nil {
 		return fmt.Errorf("reading response body: '%w'", err)
 	}
@@ -140,6 +145,12 @@ func SetEncoder(e Encoder) RequestParam {
 func SetDecoder(d Decoder) RequestParam {
 	return func(req *Request) {
 		req.Decode = d
+	}
+}
+
+func SetStreamDecoder(d StreamDecoder) RequestParam {
+	return func(req *Request) {
+		req.StreamDecoder = d
 	}
 }
 
