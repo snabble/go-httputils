@@ -397,7 +397,7 @@ func Test_HTTPClient_Get_Context_NoRetries(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
-		assert.Fail(t, "took to long")
+		assert.Fail(t, "took too long")
 	}
 }
 
@@ -730,7 +730,7 @@ func Test_HTTPClient_Post_Context_NoRetries(t *testing.T) {
 	select {
 	case <-done:
 	case <-time.After(100 * time.Millisecond):
-		assert.Fail(t, "took to long")
+		assert.Fail(t, "took too long")
 	}
 }
 
