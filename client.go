@@ -1,6 +1,7 @@
 package httputils
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -15,7 +16,7 @@ import (
 	"github.com/cenkalti/backoff/v4"
 	"github.com/die-net/lrucache"
 	"github.com/ecosia/httpcache"
-	logging "github.com/snabble/go-logging/v2"
+	"github.com/snabble/go-logging/v2"
 	"golang.org/x/oauth2"
 )
 
@@ -235,7 +236,11 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 				return err
 			}
 
-			if err := client.do(req); err != nil {
+			err = client.do(req)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return backoff.Permanent(err)
+			}
+			if err != nil {
 				return err
 			}
 			defer req.RawResponse.Body.Close()

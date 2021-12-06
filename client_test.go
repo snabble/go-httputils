@@ -371,6 +371,36 @@ func Test_HTTPClient_Get_Context(t *testing.T) {
 	require.True(t, errors.Is(err, context.Canceled))
 }
 
+func Test_HTTPClient_Get_Context_NoRetries(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) {
+			time.Sleep(200 * time.Millisecond)
+		},
+	))
+	defer server.Close()
+
+	client := NewHTTPClient(
+		MaxRetries(100),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan bool)
+	go func() {
+		err := client.Get(server.URL, &testEntity{}, Context(ctx))
+		require.True(t, errors.Is(err, context.Canceled))
+
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		assert.Fail(t, "took to long")
+	}
+}
+
 func Test_HTTPClient_Head(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusOK, ``))
 
@@ -672,6 +702,36 @@ func Test_HTTPClient_Post_Context(t *testing.T) {
 
 	err := client.Post(server.URL, &testEntity{}, Context(ctx))
 	require.True(t, errors.Is(err, context.Canceled))
+}
+
+func Test_HTTPClient_Post_Context_NoRetries(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(
+		func(http.ResponseWriter, *http.Request) {
+			time.Sleep(200 * time.Millisecond)
+		},
+	))
+	defer server.Close()
+
+	client := NewHTTPClient(
+		MaxRetries(100),
+	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	done := make(chan bool)
+	go func() {
+		err := client.Post(server.URL, &testEntity{}, Context(ctx))
+		require.True(t, errors.Is(err, context.Canceled))
+
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		assert.Fail(t, "took to long")
+	}
 }
 
 func Test_HTTPClient_Put(t *testing.T) {
