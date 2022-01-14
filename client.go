@@ -198,7 +198,7 @@ func selectTransport(config HTTPClientConfig) http.RoundTripper {
 }
 
 func createTransport(config HTTPClientConfig) http.RoundTripper {
-	transport := http.DefaultTransport.(*http.Transport)
+	transport := http.DefaultTransport.(*http.Transport).Clone()
 
 	transport.TLSClientConfig = config.tlsConfig
 
