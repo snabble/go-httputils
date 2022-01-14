@@ -198,9 +198,11 @@ func selectTransport(config HTTPClientConfig) http.RoundTripper {
 }
 
 func createTransport(config HTTPClientConfig) http.RoundTripper {
-	return &http.Transport{
-		TLSClientConfig: config.tlsConfig,
-	}
+	transport := http.DefaultTransport.(*http.Transport)
+
+	transport.TLSClientConfig = config.tlsConfig
+
+	return transport
 }
 
 func (client *HTTPClient) Head(url string, params ...RequestParam) error {
