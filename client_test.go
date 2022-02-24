@@ -15,6 +15,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/propagation"
+	tracesdk "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 )
 
@@ -219,7 +222,31 @@ func Test_HTTPClient_Get_LogCalls(t *testing.T) {
 	assert.True(t, called)
 }
 
-func Test_HTPClient_Get_HTTPErrorCases(t *testing.T) {
+func Test_HTTPClient_Get_Otel(t *testing.T) {
+	ctx, span := tracesdk.NewTracerProvider().Tracer("").Start(context.Background(), "testSpan")
+	defer span.End()
+
+	server, verifications := testMockServer(t, mockResponses(http.StatusOK, `{}`))
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	err := client.Get(server.URL, &map[string]interface{}{}, Context(ctx))
+	require.NoError(t, err)
+
+	otherSpan := trace.SpanFromContext(
+		otelPropagator.Extract(
+			context.Background(),
+			propagation.HeaderCarrier(verifications.header),
+		),
+	)
+
+	assert.True(t, otherSpan.SpanContext().IsValid())
+	assert.Equal(t, span.SpanContext().TraceID().String(), otherSpan.SpanContext().TraceID().String())
+	assert.Equal(t, span.SpanContext().SpanID().String(), otherSpan.SpanContext().SpanID().String())
+}
+
+func Test_HTTPClient_Get_HTTPErrorCases(t *testing.T) {
 	for _, test := range []struct {
 		Name           string
 		StatusCode     int
@@ -495,7 +522,31 @@ func Test_HTTPClient_PostForBody_UseRawEncoder_byteSlice(t *testing.T) {
 	assert.Equal(t, "a body", verify.body)
 }
 
-func Test_HTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
+func Test_HTTPClient_PostForBody_Otel(t *testing.T) {
+	ctx, span := tracesdk.NewTracerProvider().Tracer("").Start(context.Background(), "testSpan")
+	defer span.End()
+
+	server, verifications := testMockServer(t, mockResponses(http.StatusOK, `{}`))
+	defer server.Close()
+
+	client := NewHTTPClient()
+
+	err := client.PostForBody(server.URL, nil, &map[string]interface{}{}, Context(ctx))
+	require.NoError(t, err)
+
+	otherSpan := trace.SpanFromContext(
+		otelPropagator.Extract(
+			context.Background(),
+			propagation.HeaderCarrier(verifications.header),
+		),
+	)
+
+	assert.True(t, otherSpan.SpanContext().IsValid())
+	assert.Equal(t, span.SpanContext().TraceID().String(), otherSpan.SpanContext().TraceID().String())
+	assert.Equal(t, span.SpanContext().SpanID().String(), otherSpan.SpanContext().SpanID().String())
+}
+
+func Test_HTTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
 	for _, test := range []struct {
 		Name           string
 		StatusCode     int
@@ -861,7 +912,7 @@ func Test_HTTPClient_PatchForBody_retriesOnConnectionError(t *testing.T) {
 	assert.Equal(t, 2, server.calls)
 }
 
-func Test_HTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
+func Test_HTTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 	for _, test := range []struct {
 		Name           string
 		StatusCode     int
@@ -990,6 +1041,7 @@ type verifications struct {
 	userAgent     string
 	body          string
 	authorization string
+	header        http.Header
 }
 
 func testMockServer(t *testing.T, responses []mockServerResponse) (*httptest.Server, *verifications) {
@@ -1015,6 +1067,7 @@ func testHandler(responses []mockServerResponse) (http.Handler, *verifications) 
 			v.authorization = r.Header.Get("Authorization")
 			body, _ := ioutil.ReadAll(r.Body)
 			v.body = string(body)
+			v.header = r.Header.Clone()
 			v.calls++
 
 			current := min(i, len(responses)-1)
