@@ -453,7 +453,7 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 		params,
 		func(resp *Request) error {
 			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
+			defer func() { _, _ = ioutil.ReadAll(resp.RawResponse.Body) }()
 
 			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
 				return permanentHTTPError(resp)
@@ -463,6 +463,25 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 				return httpError(resp)
 			}
 
+			return nil
+		},
+	)
+}
+
+func (client *HTTPClient) DeleteForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
+	return client.performWithRetries(
+		http.MethodDelete,
+		url,
+		requestBody,
+		params,
+		func(resp *Request) error {
+			decodeErr := resp.decodeBody(responseBody)
+			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
+				return permanentHTTPError(resp)
+			}
+			if decodeErr != nil {
+				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			}
 			return nil
 		},
 	)

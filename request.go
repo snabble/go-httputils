@@ -161,6 +161,12 @@ func SetStreamDecoder(d StreamDecoder) RequestParam {
 	}
 }
 
+func SetHeader(name, value string) RequestParam {
+	return func(req *Request) {
+		req.Header.Set(name, value)
+	}
+}
+
 func UserAgent(userAgent string) RequestParam {
 	return func(req *Request) {
 		req.Header.Set("User-Agent", userAgent)
