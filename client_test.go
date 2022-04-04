@@ -130,6 +130,18 @@ func Test_HTTPClient_Get_AcceptHeader(t *testing.T) {
 	assert.Equal(t, "application/something+json", verify.accept)
 }
 
+func Test_HTTPClient_Get_SetArbitraryHeader(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "test"}`))
+
+	client := NewHTTPClient()
+	entity := testEntity{}
+
+	err := client.Get(server.URL+"/", &entity, SetHeader("__header__", "__value__"))
+
+	require.NoError(t, err)
+	assert.Equal(t, "__value__", verify.header.Get("__header__"))
+}
+
 func Test_HTTPClient_Get_ClientTokenHeader(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	client := NewHTTPClient()
@@ -975,6 +987,8 @@ func Test_HTTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 }
 
 func Test_HTTPClient_Delete(t *testing.T) {
+	client := NewHTTPClient(MaxRetries(3))
+
 	for _, test := range []struct {
 		name      string
 		responses []mockServerResponse
@@ -1001,10 +1015,45 @@ func Test_HTTPClient_Delete(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			server, verify := testMockServer(t, test.responses)
-			client := NewHTTPClient(MaxRetries(3))
-
 			err := client.Delete(server.URL + "/")
+			require.NoError(t, err)
+			assert.Equal(t, http.MethodDelete, verify.method)
+		})
+	}
+}
 
+func Test_HTTPClient_DeleteForBody(t *testing.T) {
+	client := NewHTTPClient(MaxRetries(3))
+
+	for _, test := range []struct {
+		name      string
+		responses []mockServerResponse
+	}{
+		{
+			name:      "success",
+			responses: mockResponses(http.StatusOK, `{"message": "deleted"}`),
+		},
+		{
+			name:      "no content",
+			responses: mockResponses(http.StatusNoContent, ``),
+		},
+		{
+			name:      "accepted",
+			responses: mockResponses(http.StatusAccepted, `{"willDelete": "later"}`),
+		},
+		{
+			name: "success after retry",
+			responses: []mockServerResponse{
+				mockResponse(http.StatusInternalServerError, `{"error": "occurred"}`),
+				mockResponse(http.StatusOK, `{"message": "deleted"}`),
+			},
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			server, verify := testMockServer(t, test.responses)
+			entity := testEntity{}
+			response := ""
+			err := client.DeleteForBody(server.URL+"/", &entity, &response, UseRawDecoder())
 			require.NoError(t, err)
 			assert.Equal(t, http.MethodDelete, verify.method)
 		})
