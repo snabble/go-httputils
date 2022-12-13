@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -295,7 +294,7 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 		params,
 		func(resp *Request) error {
 			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
+			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
@@ -315,7 +314,7 @@ func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, p
 		params,
 		func(resp *Request) error {
 			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
+			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
@@ -371,7 +370,7 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 		params,
 		func(resp *Request) error {
 			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
+			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
@@ -412,7 +411,7 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 		params,
 		func(resp *Request) error {
 			// Read all additional bytes from the body
-			defer ioutil.ReadAll(resp.RawResponse.Body)
+			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
 				return permanentHTTPError(resp)
@@ -453,7 +452,7 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 		params,
 		func(resp *Request) error {
 			// Read all additional bytes from the body
-			defer func() { _, _ = ioutil.ReadAll(resp.RawResponse.Body) }()
+			defer func() { _, _ = io.ReadAll(resp.RawResponse.Body) }()
 
 			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
 				return permanentHTTPError(resp)
