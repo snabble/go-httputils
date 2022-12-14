@@ -355,6 +355,19 @@ func Test_HttpClient_Get_UseBearerAuth(t *testing.T) {
 	assert.Equal(t, "Bearer some-token", verify.authorization)
 }
 
+func Test_HttpClient_Get_OverrideAuthHeaderPrefix(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{}`))
+
+	client := NewHTTPClient(UseBearerAuth("some-token"), OverrideAuthHeaderPrefix("BearerPrefix"))
+	request := testEntity{Field: "send"}
+
+	err := client.Get(server.URL+"/", &request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "BearerPrefix some-token", verify.authorization)
+}
+
 func Test_HttpClient_Get_UseBasicAuth(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{}`))
 
