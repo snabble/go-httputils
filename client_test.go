@@ -452,6 +452,20 @@ func Test_HTTPClient_Head(t *testing.T) {
 	assert.Equal(t, http.MethodHead, verify.method)
 }
 
+func Test_HTTPClient_HeadForHeaders(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, ``))
+
+	client := NewHTTPClient()
+
+	headers, err := client.HeadForHeaders(server.URL + "/")
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodHead, verify.method)
+	require.Containsf(t, headers, "Header_key", "expected header not found")
+	assert.Containsf(t, headers["Header_key"], "headerValue", "expected header value not found")
+}
+
 func Test_HTTPClient_PostForBody(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusCreated, `{ "Field": "test"}`))
 
@@ -1072,6 +1086,9 @@ func mockResponse(statusCode int, body string) mockServerResponse {
 	return mockServerResponse{
 		statusCode: statusCode,
 		body:       body,
+		header: map[string]string{
+			"Header_key": "headerValue",
+		},
 	}
 }
 

@@ -227,6 +227,44 @@ func (client *HTTPClient) Head(url string, params ...RequestParam) error {
 	)
 }
 
+func (client *HTTPClient) HeadForHeaders(url string, params ...RequestParam) (map[string][]string, error) {
+	var headers map[string][]string
+	err := client.withBackOff(
+		url,
+		client.createBackOffGet(),
+		func() error {
+			resolvedURL, err := client.resolveURL(url)
+			if err != nil {
+				return err
+			}
+
+			req, err := createRequest(http.MethodHead, resolvedURL, append(params, SetDecoder(func([]byte, interface{}) error { return nil })), nil)
+			if err != nil {
+				return err
+			}
+
+			err = client.do(req)
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return backoff.Permanent(err)
+			}
+			if err != nil {
+				return err
+			}
+
+			if req.isClientError() || req.RawResponse.StatusCode == http.StatusNotModified {
+				return permanentHTTPError(req)
+			}
+
+			if req.RawResponse.StatusCode != http.StatusOK {
+				return httpError(req)
+			}
+			headers = req.RawResponse.Header
+			return nil
+		},
+	)
+	return headers, err
+}
+
 func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
 	return client.perform(
 		http.MethodGet,
