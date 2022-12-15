@@ -25,8 +25,8 @@ func (t *BasicAuthTransport) RoundTrip(req *http.Request) (*http.Response, error
 	return t.Transport.RoundTrip(req)
 }
 
-// BearerAuthTransport wraps a RoundTripper. It capitalized bearer token
-// authorization headers.
+// BearerAuthOverridingHeadersTransport wraps a RoundTripper. It replaces the existing Authorization header's prefix,
+// allowing f.ex. "Authorization: BearerToken foo" to be changed to "Authorization: Bearer foo".
 // Based on https://sgeb.io/posts/fix-go-oauth2-case-sensitive-bearer-auth-headers/
 type BearerAuthOverridingHeadersTransport struct {
 	rt     http.RoundTripper
@@ -39,14 +39,10 @@ func (t *BearerAuthOverridingHeadersTransport) RoundTrip(req *http.Request) (*ht
 	auth := req.Header.Get("Authorization")
 	parts := strings.Split(auth, " ")
 	if len(parts) > 1 {
-		//auth probably looks like: <prefix> something
-		//so we replace the prefix with our own:
-		auth = t.prefix + auth[len(parts[0]):] //Bearer  Ac0H6Q410JZry95aCiTFvU2uVUHj
+		auth = t.prefix + auth[len(parts[0]):]
 	}
-
 	req2 := cloneRequest(req) // per RoundTripper contract
 	req2.Header.Set("Authorization", auth)
-
 	return t.rt.RoundTrip(req2)
 }
 
