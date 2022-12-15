@@ -44,7 +44,6 @@ type HTTPClientConfig struct {
 	password           string
 	oauth2TokenSource  oauth2.TokenSource
 	logCall            CallLogger
-	authHeaderPrefix   string
 }
 
 type HTTPClientConfigOpt func(config *HTTPClientConfig)
@@ -121,12 +120,6 @@ func UseOAuth2(source oauth2.TokenSource) HTTPClientConfigOpt {
 	}
 }
 
-func OverrideAuthHeaderPrefix(prefix string) HTTPClientConfigOpt {
-	return func(config *HTTPClientConfig) {
-		config.authHeaderPrefix = prefix
-	}
-}
-
 func LogCalls(logger CallLogger) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.logCall = logger
@@ -169,14 +162,6 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 
 func selectTransport(config HTTPClientConfig) http.RoundTripper {
 	transport := createTransport(config)
-
-	if config.authHeaderPrefix != "" {
-		var rt http.RoundTripper = &BearerAuthOverridingHeadersTransport{
-			rt:     transport,
-			prefix: config.authHeaderPrefix,
-		}
-		transport = rt
-	}
 
 	if config.username != "" || config.password != "" {
 		transport = &BasicAuthTransport{
