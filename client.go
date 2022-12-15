@@ -260,7 +260,7 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 				return err
 			}
 			defer req.RawResponse.Body.Close()
-			decodeErr := req.decodeBody(entity)
+			err = req.decodeBody(entity)
 
 			if req.isClientError() || req.RawResponse.StatusCode == http.StatusNotModified {
 				return permanentHTTPError(req)
@@ -270,8 +270,8 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 				return httpError(req)
 			}
 
-			if decodeErr != nil {
-				return wrapError(decodeErr, "decoding response body")
+			if err != nil {
+				return fmt.Errorf("decoding perform response: %w", err)
 			}
 
 			return nil
@@ -286,14 +286,16 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 		requestBody,
 		params,
 		func(resp *Request) error {
-			decodeErr := resp.decodeBody(responseBody)
+			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
-			if decodeErr != nil {
-				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			if err != nil {
+				return backoff.Permanent(
+					fmt.Errorf("decoding post for body response: %w", err),
+				)
 			}
 
 			return nil
@@ -358,14 +360,16 @@ func (client *HTTPClient) PostForLocationAndBody(
 		requestBody,
 		params,
 		func(resp *Request) error {
-			decodeErr := resp.decodeBody(responseBody)
+			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
-			if decodeErr != nil {
-				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			if err != nil {
+				return backoff.Permanent(
+					fmt.Errorf("decoding post for location and body response: %w", err),
+				)
 			}
 
 			location = resp.RawResponse.Header.Get("Location")
@@ -403,14 +407,16 @@ func (client *HTTPClient) PutForBody(url string, requestBody interface{}, respon
 		requestBody,
 		params,
 		func(resp *Request) error {
-			decodeErr := resp.decodeBody(responseBody)
+			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
-			if decodeErr != nil {
-				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			if err != nil {
+				return backoff.Permanent(
+					fmt.Errorf("decoding put for body response: %w", err),
+				)
 			}
 
 			return nil
@@ -444,14 +450,16 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 		requestBody,
 		params,
 		func(resp *Request) error {
-			decodeErr := resp.decodeBody(responseBody)
+			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
 				return permanentHTTPError(resp)
 			}
 
-			if decodeErr != nil {
-				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			if err != nil {
+				return backoff.Permanent(
+					fmt.Errorf("decoding patch for body response: %w", err),
+				)
 			}
 
 			return nil
@@ -489,12 +497,14 @@ func (client *HTTPClient) DeleteForBody(url string, requestBody interface{}, res
 		requestBody,
 		params,
 		func(resp *Request) error {
-			decodeErr := resp.decodeBody(responseBody)
+			err := resp.decodeBody(responseBody)
 			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
 				return permanentHTTPError(resp)
 			}
-			if decodeErr != nil {
-				return backoff.Permanent(wrapErrorF(decodeErr, "decoding response body"))
+			if err != nil {
+				return backoff.Permanent(
+					fmt.Errorf("decoding delete for body response: %w", err),
+				)
 			}
 			return nil
 		},
@@ -555,7 +565,12 @@ func (client *HTTPClient) do(req *Request) (err error) {
 	client.logCall(req.RawRequest, req.RawResponse, start, err)
 
 	if err != nil {
-		return wrapErrorF(err, "request failed %v", req.RawRequest.URL.String())
+		return fmt.Errorf(
+			"requesting %s %s: %w",
+			req.RawRequest.Method,
+			req.RawRequest.URL.String(),
+			err,
+		)
 	}
 
 	return nil

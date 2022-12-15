@@ -66,7 +66,7 @@ func (req *Request) createRaw(method, url string, requestBody interface{}) error
 	if requestBody != nil {
 		body, err := req.Encode(requestBody)
 		if err != nil {
-			return wrapError(err, "marshalling entity")
+			return fmt.Errorf("encoding raw request: %w", err)
 		}
 
 		data = bytes.NewBuffer(body)
@@ -74,7 +74,7 @@ func (req *Request) createRaw(method, url string, requestBody interface{}) error
 
 	raw, err := http.NewRequestWithContext(req.ctx, method, url, data)
 	if err != nil {
-		return wrapErrorF(err, "invalid url %v", url)
+		return fmt.Errorf("creating request for %v: %w", url, err)
 	}
 
 	req.RawRequest = raw
