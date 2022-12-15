@@ -106,7 +106,7 @@ func (req *Request) isClientError() bool {
 		req.RawResponse.StatusCode < http.StatusInternalServerError
 }
 
-func (req Request) decodeBody(entity interface{}) error {
+func (req *Request) decodeBody(entity interface{}) error {
 	if req.StreamDecoder != nil {
 		return req.StreamDecoder(req.RawResponse.Body, entity)
 	}

@@ -6,10 +6,10 @@ import (
 	"crypto/x509"
 	"errors"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -164,7 +164,7 @@ func Test_HTTPClient_Get_SetStreamDecoder(t *testing.T) {
 		server.URL+"/",
 		&entity,
 		SetStreamDecoder(func(r io.Reader, i interface{}) error {
-			body, errReading = ioutil.ReadAll(r)
+			body, errReading = io.ReadAll(r)
 
 			entity, ok := i.(*testEntity)
 			require.True(t, ok)
@@ -1127,7 +1127,7 @@ func testHandler(responses []mockServerResponse) (http.Handler, *verifications) 
 			v.contentType = r.Header.Get("Content-Type")
 			v.userAgent = r.Header.Get("User-Agent")
 			v.authorization = r.Header.Get("Authorization")
-			body, _ := ioutil.ReadAll(r.Body)
+			body, _ := io.ReadAll(r.Body)
 			v.body = string(body)
 			v.header = r.Header.Clone()
 			v.calls++
@@ -1181,7 +1181,7 @@ func readKeyPair(t *testing.T, name string) tls.Certificate {
 
 func readCertPool(t *testing.T) *x509.CertPool {
 	certpool := x509.NewCertPool()
-	pem, err := ioutil.ReadFile("test-certs/ca.pem")
+	pem, err := os.ReadFile("test-certs/ca.pem")
 	require.NoError(t, err)
 	require.True(t, certpool.AppendCertsFromPEM(pem))
 	return certpool
