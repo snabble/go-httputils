@@ -11,11 +11,11 @@ import (
 	"net/http"
 
 	"github.com/cenkalti/backoff/v4"
-	"go.opentelemetry.io/otel/propagation"
+	"github.com/snabble/go-logging/v2/tracex"
 )
 
 var (
-	otelPropagator = propagation.TraceContext{}
+	tracePropagation = tracex.NewTraceHeaderPropagation()
 )
 
 type Encoder func(interface{}) ([]byte, error)
@@ -139,7 +139,7 @@ func Context(ctx context.Context) RequestParam {
 	return func(req *Request) {
 		req.ctx = ctx
 
-		otelPropagator.Inject(ctx, propagation.HeaderCarrier(req.Header))
+		tracePropagation.Inject(ctx, req.Header)
 	}
 }
 
