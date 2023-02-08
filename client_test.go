@@ -13,11 +13,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/snabble/go-logging/v2/tracex"
+	"github.com/snabble/go-logging/v2/tracex/datamap"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/propagation"
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 )
 
@@ -235,27 +234,48 @@ func Test_HTTPClient_Get_LogCalls(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_Otel(t *testing.T) {
-	ctx, span := tracesdk.NewTracerProvider().Tracer("").Start(context.Background(), "testSpan")
-	defer span.End()
+	// Initialize otel:
+	tracex.NewGlobalNoopTraceProvider("some-service", "0.0.0")
 
+	// Mock up a server that records the last request:
 	server, verifications := testMockServer(t, mockResponses(http.StatusOK, `{}`))
 	defer server.Close()
 
-	client := NewHTTPClient()
+	// Start a new trace and span to simulate a request coming in from another otel-aware service:
+	ctx, span := tracex.GetTracer().Start(context.Background(), "testSpan")
+	defer span.End()
 
+	// Make a http request using said ctx:
+	client := NewHTTPClient()
 	err := client.Get(server.URL, &map[string]interface{}{}, Context(ctx))
 	require.NoError(t, err)
 
-	otherSpan := trace.SpanFromContext(
-		otelPropagator.Extract(
+	// Extract the trace into a new context based on the headers:
+	newCtx := tracex.BackgroundContextWithSpan(
+		tracePropagation.Extract(
 			context.Background(),
-			propagation.HeaderCarrier(verifications.header),
+			verifications.header,
 		),
 	)
 
-	assert.True(t, otherSpan.SpanContext().IsValid())
-	assert.Equal(t, span.SpanContext().TraceID().String(), otherSpan.SpanContext().TraceID().String())
-	assert.Equal(t, span.SpanContext().SpanID().String(), otherSpan.SpanContext().SpanID().String())
+	assertMatchingTrace(t, newCtx, ctx)
+}
+
+func assertMatchingTrace(t *testing.T, newCtx context.Context, ctx context.Context) {
+	t.Helper()
+	// Extract the datamap from the ctx
+	datamapFromHeaders := extractDatamap(newCtx)
+	assert.Contains(t, datamapFromHeaders, "__tracing__traceparent")
+
+	// Ensure they are the same as in the original request context:
+	datamapFromOriginalCtx := extractDatamap(ctx)
+	assert.Equal(t, datamapFromOriginalCtx, datamapFromHeaders)
+}
+
+func extractDatamap(ctxFromHeaders context.Context) map[string]string {
+	datamapPropagator := datamap.NewPropagator()
+	datamapFromHeaders := datamapPropagator.Inject(ctxFromHeaders)
+	return datamapFromHeaders
 }
 
 func Test_HTTPClient_Get_HTTPErrorCases(t *testing.T) {
@@ -535,27 +555,32 @@ func Test_HTTPClient_PostForBody_UseRawEncoder_byteSlice(t *testing.T) {
 }
 
 func Test_HTTPClient_PostForBody_Otel(t *testing.T) {
-	ctx, span := tracesdk.NewTracerProvider().Tracer("").Start(context.Background(), "testSpan")
-	defer span.End()
+	// Initialize otel:
+	tracex.NewGlobalNoopTraceProvider("some-service", "0.0.0")
 
+	// Mock up a server that records the last request:
 	server, verifications := testMockServer(t, mockResponses(http.StatusOK, `{}`))
 	defer server.Close()
 
-	client := NewHTTPClient()
+	// Start a new trace and span to simulate a request coming in from another otel-aware service:
+	ctx, span := tracex.GetTracer().Start(context.Background(), "testSpan")
+	defer span.End()
 
+	// Make a http request using said ctx:
+	client := NewHTTPClient()
 	err := client.PostForBody(server.URL, nil, &map[string]interface{}{}, Context(ctx))
 	require.NoError(t, err)
 
-	otherSpan := trace.SpanFromContext(
-		otelPropagator.Extract(
+	// Extract the trace into a new context based on the headers:
+	newCtx := tracex.BackgroundContextWithSpan(
+		tracePropagation.Extract(
 			context.Background(),
-			propagation.HeaderCarrier(verifications.header),
+			verifications.header,
 		),
 	)
 
-	assert.True(t, otherSpan.SpanContext().IsValid())
-	assert.Equal(t, span.SpanContext().TraceID().String(), otherSpan.SpanContext().TraceID().String())
-	assert.Equal(t, span.SpanContext().SpanID().String(), otherSpan.SpanContext().SpanID().String())
+	assertMatchingTrace(t, newCtx, ctx)
+
 }
 
 func Test_HTTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
