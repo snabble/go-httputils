@@ -38,6 +38,7 @@ type HTTPClientConfig struct {
 	tlsConfig          *tls.Config
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
+	checkRedirect      func(req *http.Request, via []*http.Request) error
 	cacheSize          uint64
 	token              string
 	username           string
@@ -74,6 +75,12 @@ func NoRetries() HTTPClientConfigOpt {
 func BaseURL(url string) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.baseURL = url
+	}
+}
+
+func SetCheckRedirect(check func(req *http.Request, via []*http.Request) error) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.checkRedirect = check
 	}
 }
 
@@ -150,8 +157,9 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 
 	return &HTTPClient{
 		wrapped: http.Client{
-			Timeout:   config.timeout,
-			Transport: selectTransport(config),
+			Timeout:       config.timeout,
+			Transport:     selectTransport(config),
+			CheckRedirect: config.checkRedirect,
 		},
 		baseURL:            config.baseURL,
 		createBackOffGet:   config.createBackOffGet,
@@ -244,6 +252,11 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 			if err != nil {
 				return err
 			}
+
+			if req.RawResponse.StatusCode == http.StatusMovedPermanently {
+				return nil
+			}
+
 			defer req.RawResponse.Body.Close()
 			err = req.decodeBody(entity)
 
