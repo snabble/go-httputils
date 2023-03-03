@@ -1085,6 +1085,20 @@ func Test_HTTPClient_DeleteForBody(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Get_Redirect(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusMovedPermanently, `<p>Redirected</p>`))
+
+	client := NewHTTPClient(SetCheckRedirect(func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}))
+	entity := testEntity{}
+
+	err := client.Get(server.URL+"/", &entity)
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+}
+
 type testEntity struct {
 	Field string
 }

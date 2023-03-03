@@ -252,6 +252,11 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 			if err != nil {
 				return err
 			}
+
+			if req.RawResponse.StatusCode == http.StatusMovedPermanently {
+				return nil
+			}
+
 			defer req.RawResponse.Body.Close()
 			err = req.decodeBody(entity)
 
