@@ -324,11 +324,9 @@ func Test_HTTPClient_Get_HTTPErrorCases(t *testing.T) {
 
 			assert.Error(t, err)
 			assert.Equal(t, 1, verify.calls)
-			if clientError, ok := err.(HTTPClientError); ok {
-				assert.Equal(t, test.StatusCode, clientError.Code)
-			} else {
-				t.Error("Not an HTTPClientError:", err)
-			}
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
 			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
@@ -634,11 +632,9 @@ func Test_HTTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
 
 			assert.Error(t, err)
 			assert.Equal(t, 1, verify.calls)
-			if clientError, ok := err.(HTTPClientError); ok {
-				assert.Equal(t, test.StatusCode, clientError.Code)
-			} else {
-				t.Error("Not an HTTPClientError:", err)
-			}
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
 			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
@@ -677,11 +673,9 @@ func Test_HTTPClient_Post_clientError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
-	}
+	clientError, ok := err.(HTTPClientError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, clientError.Code)
 }
 
 func Test_HTTPClient_Post_serverError(t *testing.T) {
@@ -845,11 +839,9 @@ func Test_HTTPClient_Put_clientError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
-	}
+	clientError, ok := err.(HTTPClientError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, clientError.Code)
 }
 
 func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
@@ -903,11 +895,9 @@ func Test_HTTPClient_Patch_clientError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
-	}
+	clientError, ok := err.(HTTPClientError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, clientError.Code)
 }
 
 func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
@@ -1001,11 +991,9 @@ func Test_HTTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 
 			assert.Error(t, err)
 			assert.Equal(t, 1, verify.calls)
-			if clientError, ok := err.(HTTPClientError); ok {
-				assert.Equal(t, test.StatusCode, clientError.Code)
-			} else {
-				t.Error("Not an HTTPClientError:", err)
-			}
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
 			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
