@@ -496,9 +496,16 @@ func (client *HTTPClient) DeleteForBody(url string, requestBody interface{}, res
 		params,
 		func(resp *Request) error {
 			err := resp.decodeBody(responseBody)
-			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
+
+			switch status := resp.RawResponse.StatusCode; {
+			case status < http.StatusBadRequest:
+				// Everything ok
+			case http.StatusBadRequest <= status && status < http.StatusInternalServerError:
 				return permanentHTTPError(resp)
+			default:
+				return httpError(resp)
 			}
+
 			if err != nil {
 				return backoff.Permanent(
 					fmt.Errorf("decoding delete for body response: %w", err),
