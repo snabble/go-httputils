@@ -324,11 +324,9 @@ func Test_HTTPClient_Get_HTTPErrorCases(t *testing.T) {
 
 			assert.Error(t, err)
 			assert.Equal(t, 1, verify.calls)
-			if clientError, ok := err.(HTTPClientError); ok {
-				assert.Equal(t, test.StatusCode, clientError.Code)
-			} else {
-				t.Error("Not an HTTPClientError:", err)
-			}
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
 			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
@@ -634,11 +632,9 @@ func Test_HTTPClient_PostForBody_HTTPErrorCases(t *testing.T) {
 
 			assert.Error(t, err)
 			assert.Equal(t, 1, verify.calls)
-			if clientError, ok := err.(HTTPClientError); ok {
-				assert.Equal(t, test.StatusCode, clientError.Code)
-			} else {
-				t.Error("Not an HTTPClientError:", err)
-			}
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
 			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
@@ -677,11 +673,9 @@ func Test_HTTPClient_Post_clientError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
-	}
+	clientError, ok := err.(HTTPClientError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, clientError.Code)
 }
 
 func Test_HTTPClient_Post_serverError(t *testing.T) {
@@ -845,11 +839,9 @@ func Test_HTTPClient_Put_clientError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
-	}
+	clientError, ok := err.(HTTPClientError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, clientError.Code)
 }
 
 func Test_HTTPClient_Put_retriesOnConnectionError(t *testing.T) {
@@ -903,11 +895,9 @@ func Test_HTTPClient_Patch_clientError(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Equal(t, 1, verify.calls)
-	if clientError, ok := err.(HTTPClientError); ok {
-		assert.Equal(t, http.StatusBadRequest, clientError.Code)
-	} else {
-		t.Error("Not an HTTPClientError:", err)
-	}
+	clientError, ok := err.(HTTPClientError)
+	require.True(t, ok)
+	assert.Equal(t, http.StatusBadRequest, clientError.Code)
 }
 
 func Test_HTTPClient_Patch_retriesOnConnectionError(t *testing.T) {
@@ -1001,11 +991,9 @@ func Test_HTTPClient_PatchForBody_HTTPErrorCases(t *testing.T) {
 
 			assert.Error(t, err)
 			assert.Equal(t, 1, verify.calls)
-			if clientError, ok := err.(HTTPClientError); ok {
-				assert.Equal(t, test.StatusCode, clientError.Code)
-			} else {
-				t.Error("Not an HTTPClientError:", err)
-			}
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
 			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
@@ -1047,6 +1035,48 @@ func Test_HTTPClient_Delete(t *testing.T) {
 	}
 }
 
+func Test_HTTPClient_Delete_HTTPErrorCases(t *testing.T) {
+	for _, test := range []struct {
+		Name       string
+		StatusCode int
+		Body       string
+	}{
+		{
+			Name:       "client error no body",
+			StatusCode: http.StatusBadRequest,
+		},
+		{
+			Name:       "client error with body",
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"Field": "error" }`,
+		},
+		{
+			Name:       "server error no body",
+			StatusCode: http.StatusInternalServerError,
+		},
+		{
+			Name:       "server error with body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       `{"Field": "error" }`,
+		},
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			server, verify := testMockServer(t, mockResponses(test.StatusCode, test.Body))
+
+			client := NewHTTPClient()
+
+			err := client.Delete(server.URL + "/")
+
+			assert.Error(t, err)
+			assert.Equal(t, 1, verify.calls)
+
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
+		})
+	}
+}
+
 func Test_HTTPClient_DeleteForBody(t *testing.T) {
 	client := NewHTTPClient(MaxRetries(3))
 
@@ -1081,6 +1111,66 @@ func Test_HTTPClient_DeleteForBody(t *testing.T) {
 			err := client.DeleteForBody(server.URL+"/", &entity, &response, UseRawDecoder())
 			require.NoError(t, err)
 			assert.Equal(t, http.MethodDelete, verify.method)
+		})
+	}
+}
+
+func Test_HTTPClient_DeleteForBody_HTTPErrorCases(t *testing.T) {
+	for _, test := range []struct {
+		Name           string
+		StatusCode     int
+		Body           string
+		ExpectedEntity testEntity
+	}{
+		{
+			Name:       "client error no body",
+			StatusCode: http.StatusBadRequest,
+		},
+		{
+			Name:       "client error with invalid body",
+			StatusCode: http.StatusBadRequest,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "client error with body",
+			StatusCode: http.StatusBadRequest,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+		{
+			Name:       "server error no body",
+			StatusCode: http.StatusInternalServerError,
+		},
+		{
+			Name:       "server error with invalid body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       "invalid json",
+		},
+		{
+			Name:       "server error with body",
+			StatusCode: http.StatusInternalServerError,
+			Body:       `{"Field": "error" }`,
+			ExpectedEntity: testEntity{
+				Field: "error",
+			},
+		},
+	} {
+		t.Run(test.Name, func(t *testing.T) {
+			server, verify := testMockServer(t, mockResponses(test.StatusCode, test.Body))
+
+			client := NewHTTPClient()
+			entity := testEntity{}
+
+			err := client.DeleteForBody(server.URL+"/", &entity, &entity)
+
+			assert.Error(t, err)
+			assert.Equal(t, 1, verify.calls)
+			clientError, ok := err.(HTTPClientError)
+			require.True(t, ok)
+			assert.Equal(t, test.StatusCode, clientError.Code)
+			assert.Equal(t, test.ExpectedEntity, entity)
 		})
 	}
 }
