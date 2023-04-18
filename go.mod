@@ -3,7 +3,7 @@ module github.com/snabble/go-httputils
 go 1.19
 
 require (
-	github.com/cenkalti/backoff/v4 v4.2.0
+	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/die-net/lrucache v0.0.0-20220628165024-20a71bc65bf1
 	github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863
 	github.com/snabble/go-logging/v2 v2.11.1
