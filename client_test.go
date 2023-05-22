@@ -5,6 +5,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
@@ -103,6 +105,22 @@ func Test_HTTPClient_Get_BaseURL(t *testing.T) {
 		assert.Equal(t, entity.Field, "other")
 		assert.Equal(t, verify.calls, 1)
 	})
+}
+
+func Test_HTTPClient_Get_TracePropagation(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "test"}`))
+	client := NewHTTPClient()
+	entity := testEntity{}
+
+	provider := tracex.NewGlobalNoopTraceProvider("sampleApp", "v1.0.0")
+	defer func() { _ = provider.Shutdown(context.Background()) }()
+	ctx, span := startSpan()
+	defer span.End()
+
+	err := client.Get(server.URL+"/", &entity, Context(ctx))
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, verify.header.Get("Traceparent"))
 }
 
 func Test_HTTPClient_Get_UserAgent(t *testing.T) {
@@ -1341,4 +1359,8 @@ func (server *testServer) do() {
 			conn.Close()
 		}
 	}()
+}
+
+func startSpan() (context.Context, trace.Span) {
+	return otel.Tracer("global").Start(context.Background(), "test")
 }

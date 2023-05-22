@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"github.com/snabble/go-logging/v2/tracex/propagation"
 	"io"
 	"net/http"
 	"net/url"
@@ -147,6 +148,8 @@ type HTTPClient struct {
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
 	logCall            CallLogger
+
+	tracePropagation propagation.TextMapPropagator
 }
 
 func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
@@ -165,6 +168,8 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 		createBackOffGet:   config.createBackOffGet,
 		createBackOffOther: config.createBackOffOther,
 		logCall:            config.logCall,
+
+		tracePropagation: propagation.TraceContext{},
 	}
 }
 
@@ -562,6 +567,8 @@ func (client *HTTPClient) performWithBody(method, url string, requestBody interf
 
 func (client *HTTPClient) do(req *Request) (err error) {
 	req.applyHeader()
+
+	client.tracePropagation.Inject(req.ctx, propagation.HeaderCarrier(req.RawRequest.Header))
 
 	start := time.Now()
 
