@@ -179,6 +179,11 @@ func Accept(mediaType string) RequestParam {
 	}
 }
 
+// ClientToken set the "Client-Token" header
+//
+// Deprecated: The use of the non-standard "Client-Token" header is
+// deprecated. Use the "Authorization" header instead. See
+// `BearerAuth(…)`
 func ClientToken(token string) RequestParam {
 	return func(req *Request) {
 		req.Header.Set("Client-Token", token)
