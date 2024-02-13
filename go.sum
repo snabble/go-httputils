@@ -34,8 +34,8 @@ github.com/rogpeppe/go-internal v1.12.0 h1:exVL4IDcn6na9z1rAb56Vxr+CgyK3nn3O+epU
 github.com/rogpeppe/go-internal v1.12.0/go.mod h1:E+RYuTGaKKdloAfM02xzb0FW3Paa99yedzYV+kq4uf4=
 github.com/sirupsen/logrus v1.9.3 h1:dueUQJ1C2q9oE3F7wvmSGAaVtTmUizReu6fjN8uqzbQ=
 github.com/sirupsen/logrus v1.9.3/go.mod h1:naHLuLoDiP4jHNo9R0sCBMtWGeIprob74mVsIT4qYEQ=
-github.com/snabble/go-logging/v2 v2.12.4 h1:3doAUgLURUjdtzNFr8qmYE4zsY7o6ZGD/vvF4wdRZwA=
-github.com/snabble/go-logging/v2 v2.12.4/go.mod h1:4fXgENpSGWdnuGswRjn9IjYK0byQMxgoWcqmA6kn70I=
+github.com/snabble/go-logging/v2 v2.12.5 h1:YK7u0+/cCQsaoNJZOXlMzUAkewo+brPRlXttpH4Zyas=
+github.com/snabble/go-logging/v2 v2.12.5/go.mod h1:LIgUxXf0EncJecfbm6RgUbbdCmPVSDSyQrxOosaghGI=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
 github.com/stretchr/objx v0.4.0/go.mod h1:YvHI0jy2hoMjB+UWwv71VJQ9isScKT/TqJzVSSt89Yw=
 github.com/stretchr/testify v1.7.0/go.mod h1:6Fq8oRcR53rry900zMqJjRRixrwX3KX962/h/Wwjteg=
