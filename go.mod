@@ -1,14 +1,14 @@
 module github.com/snabble/go-httputils
 
-go 1.21
+go 1.22
 
-toolchain go1.21.0
+toolchain go1.22.0
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/die-net/lrucache v0.0.0-20220628165024-20a71bc65bf1
 	github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863
-	github.com/snabble/go-logging/v2 v2.12.4
+	github.com/snabble/go-logging/v2 v2.12.5
 	github.com/stretchr/testify v1.8.4
 	go.opentelemetry.io/otel v1.23.1
 	go.opentelemetry.io/otel/trace v1.23.1
@@ -31,6 +31,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.23.1 // indirect
 	golang.org/x/sys v0.17.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
+	google.golang.org/protobuf v1.32.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
