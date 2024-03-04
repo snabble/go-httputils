@@ -9,7 +9,7 @@ require (
 	github.com/die-net/lrucache v0.0.0-20220628165024-20a71bc65bf1
 	github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863
 	github.com/snabble/go-logging/v2 v2.12.6
-	github.com/stretchr/testify v1.8.4
+	github.com/stretchr/testify v1.9.0
 	go.opentelemetry.io/otel v1.24.0
 	go.opentelemetry.io/otel/trace v1.24.0
 	golang.org/x/oauth2 v0.17.0
