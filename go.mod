@@ -10,8 +10,8 @@ require (
 	github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863
 	github.com/snabble/go-logging/v2 v2.12.6
 	github.com/stretchr/testify v1.9.0
-	go.opentelemetry.io/otel v1.24.0
-	go.opentelemetry.io/otel/trace v1.24.0
+	go.opentelemetry.io/otel v1.25.0
+	go.opentelemetry.io/otel/trace v1.25.0
 	golang.org/x/oauth2 v0.19.0
 )
 
@@ -26,8 +26,8 @@ require (
 	github.com/uptrace/opentelemetry-go-extra/otellogrus v0.2.3 // indirect
 	github.com/uptrace/opentelemetry-go-extra/otelutil v0.2.3 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0 // indirect
-	go.opentelemetry.io/otel/metric v1.24.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.24.0 // indirect
-	golang.org/x/sys v0.17.0 // indirect
+	go.opentelemetry.io/otel/metric v1.25.0 // indirect
+	go.opentelemetry.io/otel/sdk v1.25.0 // indirect
+	golang.org/x/sys v0.18.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
