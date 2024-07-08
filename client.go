@@ -5,13 +5,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/snabble/go-logging/v2/tracex/propagation"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/snabble/go-logging/v2/tracex/propagation"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/die-net/lrucache"
@@ -574,7 +575,7 @@ func (client *HTTPClient) do(req *Request) (err error) {
 
 	req.RawResponse, err = client.wrapped.Do(req.RawRequest)
 
-	client.logCall(req.RawRequest, req.RawResponse, start, err)
+	client.logCall(req.RawRequest, req.RawResponse, start, logCallErrorOrNil(err))
 
 	if err != nil {
 		return fmt.Errorf(
@@ -586,6 +587,14 @@ func (client *HTTPClient) do(req *Request) (err error) {
 	}
 
 	return nil
+}
+
+// logCallErrorOrNil returns the error it was given unless it is a context cancel error, in which case it returns nil.
+func logCallErrorOrNil(err error) error {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return nil
+	}
+	return err
 }
 
 func (client *HTTPClient) resolveURL(refString string) (string, error) {
