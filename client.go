@@ -5,13 +5,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/snabble/go-logging/v2/tracex/propagation"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"syscall"
 	"time"
+
+	"github.com/snabble/go-logging/v2/tracex/propagation"
 
 	"github.com/cenkalti/backoff/v4"
 	"github.com/die-net/lrucache"
@@ -23,8 +24,9 @@ import (
 const disableCache = 0
 
 type HTTPClientError struct {
-	Code   int
-	Status string
+	Code         int
+	Status       string
+	ResponseBody []byte
 }
 
 func (err HTTPClientError) Error() string {
@@ -266,11 +268,11 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 			err = req.decodeBody(entity)
 
 			if req.isClientError() || req.RawResponse.StatusCode == http.StatusNotModified {
-				return permanentHTTPError(req)
+				return permanentHTTPError(req, entity)
 			}
 
 			if req.RawResponse.StatusCode != http.StatusOK {
-				return httpError(req)
+				return httpError(req, entity)
 			}
 
 			if err != nil {
@@ -289,11 +291,11 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 		requestBody,
 		params,
 		func(resp *Request) error {
-			err := resp.decodeBody(responseBody)
-
 			if !resp.isSuccessfulPostForBody() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, responseBody)
 			}
+
+			err := resp.decodeBody(responseBody)
 
 			if err != nil {
 				return backoff.Permanent(
@@ -317,7 +319,7 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, nil)
 			}
 
 			return nil
@@ -337,7 +339,7 @@ func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, p
 			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, nil)
 			}
 
 			location = resp.RawResponse.Header.Get("Location")
@@ -366,7 +368,7 @@ func (client *HTTPClient) PostForLocationAndBody(
 			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, responseBody)
 			}
 
 			if err != nil {
@@ -395,7 +397,7 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, nil)
 			}
 
 			return nil
@@ -413,7 +415,7 @@ func (client *HTTPClient) PutForBody(url string, requestBody interface{}, respon
 			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, responseBody)
 			}
 
 			if err != nil {
@@ -438,7 +440,7 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 			defer io.ReadAll(resp.RawResponse.Body)
 
 			if !resp.isSuccessfulPost() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, nil)
 			}
 
 			return nil
@@ -456,7 +458,7 @@ func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, resp
 			err := resp.decodeBody(responseBody)
 
 			if !resp.isSuccessfulPostForBody() {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, responseBody)
 			}
 
 			if err != nil {
@@ -481,11 +483,11 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 			defer func() { _, _ = io.ReadAll(resp.RawResponse.Body) }()
 
 			if http.StatusBadRequest <= resp.RawResponse.StatusCode && resp.RawResponse.StatusCode < http.StatusInternalServerError {
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, nil)
 			}
 
 			if resp.RawResponse.StatusCode != http.StatusOK && resp.RawResponse.StatusCode != http.StatusNoContent && resp.RawResponse.StatusCode != http.StatusAccepted {
-				return httpError(resp)
+				return httpError(resp, nil)
 			}
 
 			return nil
@@ -506,9 +508,9 @@ func (client *HTTPClient) DeleteForBody(url string, requestBody interface{}, res
 			case status < http.StatusBadRequest:
 				// Everything ok
 			case http.StatusBadRequest <= status && status < http.StatusInternalServerError:
-				return permanentHTTPError(resp)
+				return permanentHTTPError(resp, responseBody)
 			default:
-				return httpError(resp)
+				return httpError(resp, responseBody)
 			}
 
 			if err != nil {

@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +12,9 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/snabble/go-logging/v2/tracex"
 	"github.com/snabble/go-logging/v2/tracex/datamap"

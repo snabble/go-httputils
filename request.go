@@ -125,12 +125,23 @@ func applyParams(req *Request, params []RequestParam) {
 	}
 }
 
-func permanentHTTPError(resp *Request) error {
-	return backoff.Permanent(httpError(resp))
+func permanentHTTPError(resp *Request, responseBody interface{}) error {
+	return backoff.Permanent(httpError(resp, responseBody))
 }
 
-func httpError(resp *Request) error {
-	return HTTPClientError{Code: resp.RawResponse.StatusCode, Status: resp.RawResponse.Status}
+func httpError(resp *Request, responseBody interface{}) error {
+	body, err := io.ReadAll(resp.RawResponse.Body)
+	if err != nil {
+		return fmt.Errorf("reading response body: %v", err)
+	}
+
+	_ = json.Unmarshal(body, responseBody) // attempt to populate response with response body in case it's matching JSON
+
+	return HTTPClientError{
+		Code:         resp.RawResponse.StatusCode,
+		Status:       resp.RawResponse.Status,
+		ResponseBody: body,
+	}
 }
 
 type RequestParam func(*Request)
