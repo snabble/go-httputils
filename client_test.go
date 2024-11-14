@@ -5,8 +5,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net"
 	"net/http"
@@ -14,6 +12,9 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/snabble/go-logging/v2/tracex"
 	"github.com/snabble/go-logging/v2/tracex/datamap"
@@ -503,6 +504,26 @@ func Test_HTTPClient_PostForBody(t *testing.T) {
 	assert.Equal(t, "application/json", verify.contentType)
 	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
 	assert.Equal(t, testEntity{Field: "test"}, response)
+}
+
+func Test_HTTPClient_PostForBody_withWrapper(t *testing.T) {
+	responseBody := `{ "Field": "test"}`
+	server, verify := testMockServer(t, mockResponses(http.StatusCreated, responseBody))
+
+	client := NewHTTPClient()
+	request := testEntity{Field: "send"}
+
+	var response JSONResponseWrapper[testEntity]
+
+	err := client.PostForBody(server.URL+"/", &request, &response)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, http.MethodPost, verify.method)
+	assert.Equal(t, "application/json", verify.contentType)
+	assert.JSONEq(t, `{ "Field": "send"}`, verify.body)
+	assert.Equal(t, testEntity{Field: "test"}, response.Decoded)
+	assert.Equal(t, responseBody, response.String())
 }
 
 func Test_HTTPClient_PostForBody_RetriesOnConnectionError(t *testing.T) {
