@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/snabble/go-logging/v2/tracex/propagation"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,6 +16,7 @@ import (
 	"github.com/die-net/lrucache"
 	"github.com/ecosia/httpcache"
 	"github.com/snabble/go-logging/v2"
+	"github.com/snabble/go-logging/v2/tracex/propagation"
 	"golang.org/x/oauth2"
 )
 
@@ -46,6 +46,7 @@ type HTTPClientConfig struct {
 	password           string
 	oauth2TokenSource  oauth2.TokenSource
 	logCall            CallLogger
+	transportCreator   func(http.RoundTripper) http.RoundTripper
 }
 
 type HTTPClientConfigOpt func(config *HTTPClientConfig)
@@ -128,6 +129,12 @@ func UseOAuth2(source oauth2.TokenSource) HTTPClientConfigOpt {
 	}
 }
 
+func UseTransport(creator func(base http.RoundTripper) http.RoundTripper) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.transportCreator = creator
+	}
+}
+
 func LogCalls(logger CallLogger) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
 		config.logCall = logger
@@ -204,6 +211,10 @@ func selectTransport(config HTTPClientConfig) http.RoundTripper {
 			Base:   transport,
 			Source: config.oauth2TokenSource,
 		}
+	}
+
+	if config.transportCreator != nil {
+		transport = config.transportCreator(transport)
 	}
 
 	return transport
