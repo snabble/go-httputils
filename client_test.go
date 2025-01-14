@@ -427,6 +427,24 @@ func Test_HTTPClient_Get_TLSConfig(t *testing.T) {
 	assert.Equal(t, testEntity{Field: "test"}, entity)
 }
 
+func Test_HttpClient_Get_UseOwnTransport(t *testing.T) {
+	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{}`))
+
+	client := NewHTTPClient(UseTransport(func(baseRT http.RoundTripper) http.RoundTripper {
+		return &BearerAuthTransport{
+			Token:     "__token__",
+			Transport: baseRT,
+		}
+	}))
+	request := testEntity{Field: "send"}
+
+	err := client.Get(server.URL+"/", &request)
+
+	assert.NoError(t, err)
+	assert.Equal(t, 1, verify.calls)
+	assert.Equal(t, "Bearer __token__", verify.authorization)
+}
+
 func Test_HTTPClient_Get_Context(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(
 		func(http.ResponseWriter, *http.Request) {
