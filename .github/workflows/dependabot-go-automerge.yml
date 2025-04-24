@@ -1,0 +1,11 @@
+name: Dependabot auto-merge for Go
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  automerge:
+    uses: snabble/build-helper/.github/workflows/dependabot-go-automerge.yml@master
+    secrets: inherit
