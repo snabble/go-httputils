@@ -5,7 +5,49 @@ permissions:
   contents: write
   pull-requests: write
 
+
 jobs:
-  automerge:
-    uses: snabble/build-helper/.github/workflows/dependabot-go-automerge.yml@master
-    secrets: inherit
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    env:
+      ALLOWED_DEPS: >-
+          cloud.google.com/go/pubsub
+          cloud.google.com/go/storage
+          github.com/samber/lo
+          github.com/snabble/go-access/v3
+          github.com/snabble/go-httputils
+          github.com/snabble/go-logging/v2
+          golang.org/x/crypto
+          golang.org/x/exp
+          golang.org/x/net
+          golang.org/x/sync
+          golang.org/x/text
+          golang.org/x/time
+          google.golang.org/api
+
+    steps:
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7
+        with:
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+
+      - name: Approve and auto-merge PR
+        run: |
+          for allowed in ${ALLOWED_DEPS}; do
+            for updated in ${UPDATED_DEPS}; do
+              if [[ "${allowed}" == "${updated}" ]]; then
+                gh pr review --approve "$PR_URL"
+                gh pr merge --auto --merge "$PR_URL"
+                exit 0
+              fi
+            done
+          done
+
+          echo "Dependency automerge for ${UPDATED_DEPS} not enabled."
+
+        env:
+          UPDATED_DEPS: "${{ join(steps.metadata.outputs.dependency-names, ' ') }}"
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}
