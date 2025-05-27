@@ -5,7 +5,7 @@ import (
 )
 
 type JSONResponseWrapper[T any] struct {
-	Raw     []byte
+	Raw     json.RawMessage
 	Decoded T
 }
 
