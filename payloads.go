@@ -5,16 +5,15 @@ import (
 )
 
 type JSONResponseWrapper[T any] struct {
-	Raw     json.RawMessage
+	Raw     string
 	Decoded T
 }
 
 func (w *JSONResponseWrapper[T]) UnmarshalJSON(data []byte) error {
-	w.Raw = make([]byte, len(data))
-	copy(w.Raw, data)
+	w.Raw = string(data)
 	return json.Unmarshal(data, &w.Decoded)
 }
 
 func (w *JSONResponseWrapper[T]) String() string {
-	return string(w.Raw)
+	return w.Raw
 }
