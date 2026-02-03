@@ -1,6 +1,6 @@
 module github.com/snabble/go-httputils
 
-go 1.25.3
+go 1.25.6
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
