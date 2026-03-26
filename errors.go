@@ -12,6 +12,10 @@ func AsHTTPClientError(err error) (HTTPClientError, bool) {
 }
 
 func IsNotFound(err error) bool {
+	return IsErrorWithStatusCode(err, http.StatusNotFound)
+}
+
+func IsErrorWithStatusCode(err error, statusCode int) bool {
 	httpErr, ok := AsHTTPClientError(err)
-	return ok && httpErr.Code == http.StatusNotFound
+	return ok && httpErr.Code == statusCode
 }
