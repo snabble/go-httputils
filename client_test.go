@@ -13,9 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/snabble/go-logging/v2/tracex"
 	"github.com/snabble/go-logging/v2/tracex/datamap"
 	"github.com/stretchr/testify/assert"
@@ -115,7 +112,7 @@ func Test_HTTPClient_Get_TracePropagation(t *testing.T) {
 
 	provider := tracex.NewGlobalNoopTraceProvider("sampleApp", "v1.0.0")
 	defer func() { _ = provider.Shutdown(context.Background()) }()
-	ctx, span := startSpan()
+	ctx, span := tracex.GetTracer().Start(context.Background(), "test")
 	defer span.End()
 
 	err := client.Get(server.URL+"/", &entity, Context(ctx))
@@ -1398,8 +1395,4 @@ func (server *testServer) do() {
 			conn.Close()
 		}
 	}()
-}
-
-func startSpan() (context.Context, trace.Span) {
-	return otel.Tracer("global").Start(context.Background(), "test")
 }
