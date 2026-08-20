@@ -18,10 +18,10 @@ var (
 	tracePropagation = tracex.NewTraceHeaderPropagation()
 )
 
-type Encoder func(interface{}) ([]byte, error)
+type Encoder func(any) ([]byte, error)
 
-type StreamDecoder func(io.Reader, interface{}) error
-type Decoder func([]byte, interface{}) error
+type StreamDecoder func(io.Reader, any) error
+type Decoder func([]byte, any) error
 
 type Request struct {
 	RawRequest *http.Request
@@ -34,7 +34,7 @@ type Request struct {
 	RawResponse   *http.Response
 }
 
-func createRequest(method, url string, params []RequestParam, requestBody interface{}) (*Request, error) {
+func createRequest(method, url string, params []RequestParam, requestBody any) (*Request, error) {
 	request := newRequest(params)
 
 	if err := request.createRaw(method, url, requestBody); err != nil {
@@ -61,7 +61,7 @@ func newRequest(params []RequestParam) *Request {
 	return request
 }
 
-func (req *Request) createRaw(method, url string, requestBody interface{}) error {
+func (req *Request) createRaw(method, url string, requestBody any) error {
 	var data io.Reader
 	if requestBody != nil {
 		body, err := req.Encode(requestBody)
@@ -106,7 +106,7 @@ func (req *Request) isClientError() bool {
 		req.RawResponse.StatusCode < http.StatusInternalServerError
 }
 
-func (req *Request) decodeBody(entity interface{}) error {
+func (req *Request) decodeBody(entity any) error {
 	if req.StreamDecoder != nil {
 		return req.StreamDecoder(req.RawResponse.Body, entity)
 	}
@@ -211,7 +211,7 @@ func ContentType(contentType string) RequestParam {
 
 func UseRawDecoder() RequestParam {
 	return SetDecoder(
-		func(b []byte, v interface{}) error {
+		func(b []byte, v any) error {
 			switch s := v.(type) {
 			case *string:
 				*s = string(b)
@@ -227,7 +227,7 @@ func UseRawDecoder() RequestParam {
 
 func UseRawEncoder() RequestParam {
 	return SetEncoder(
-		func(v interface{}) ([]byte, error) {
+		func(v any) ([]byte, error) {
 			switch s := v.(type) {
 			case string:
 				return []byte(s), nil

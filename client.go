@@ -233,11 +233,11 @@ func (client *HTTPClient) Head(url string, params ...RequestParam) error {
 		http.MethodHead,
 		url,
 		nil,
-		append(params, SetDecoder(func([]byte, interface{}) error { return nil }))...,
+		append(params, SetDecoder(func([]byte, any) error { return nil }))...,
 	)
 }
 
-func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestParam) error {
+func (client *HTTPClient) Get(url string, entity any, params ...RequestParam) error {
 	return client.perform(
 		http.MethodGet,
 		url,
@@ -246,7 +246,7 @@ func (client *HTTPClient) Get(url string, entity interface{}, params ...RequestP
 	)
 }
 
-func (client *HTTPClient) perform(method, url string, entity interface{}, params ...RequestParam) error {
+func (client *HTTPClient) perform(method, url string, entity any, params ...RequestParam) error {
 	return client.withBackOff(
 		url,
 		client.createBackOffGet(),
@@ -293,7 +293,7 @@ func (client *HTTPClient) perform(method, url string, entity interface{}, params
 	)
 }
 
-func (client *HTTPClient) PostForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) PostForBody(url string, requestBody any, responseBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPost,
 		url,
@@ -317,7 +317,7 @@ func (client *HTTPClient) PostForBody(url string, requestBody interface{}, respo
 	)
 }
 
-func (client *HTTPClient) Post(url string, requestBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) Post(url string, requestBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPost,
 		url,
@@ -336,7 +336,7 @@ func (client *HTTPClient) Post(url string, requestBody interface{}, params ...Re
 	)
 }
 
-func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, params ...RequestParam) (string, error) {
+func (client *HTTPClient) PostForLocation(url string, requestBody any, params ...RequestParam) (string, error) {
 	var location string
 	err := client.performWithRetries(
 		http.MethodPost,
@@ -362,8 +362,8 @@ func (client *HTTPClient) PostForLocation(url string, requestBody interface{}, p
 
 func (client *HTTPClient) PostForLocationAndBody(
 	url string,
-	requestBody interface{},
-	responseBody interface{},
+	requestBody any,
+	responseBody any,
 	params ...RequestParam,
 ) (string, error) {
 	var location string
@@ -395,7 +395,7 @@ func (client *HTTPClient) PostForLocationAndBody(
 	return location, err
 }
 
-func (client *HTTPClient) Put(url string, requestBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) Put(url string, requestBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPut,
 		url,
@@ -414,7 +414,7 @@ func (client *HTTPClient) Put(url string, requestBody interface{}, params ...Req
 	)
 }
 
-func (client *HTTPClient) PutForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) PutForBody(url string, requestBody any, responseBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPut,
 		url,
@@ -438,7 +438,7 @@ func (client *HTTPClient) PutForBody(url string, requestBody interface{}, respon
 	)
 }
 
-func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) Patch(url string, requestBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPatch,
 		url,
@@ -457,7 +457,7 @@ func (client *HTTPClient) Patch(url string, requestBody interface{}, params ...R
 	)
 }
 
-func (client *HTTPClient) PatchForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) PatchForBody(url string, requestBody any, responseBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodPatch,
 		url,
@@ -504,7 +504,7 @@ func (client *HTTPClient) Delete(url string, params ...RequestParam) error {
 	)
 }
 
-func (client *HTTPClient) DeleteForBody(url string, requestBody interface{}, responseBody interface{}, params ...RequestParam) error {
+func (client *HTTPClient) DeleteForBody(url string, requestBody any, responseBody any, params ...RequestParam) error {
 	return client.performWithRetries(
 		http.MethodDelete,
 		url,
@@ -532,7 +532,7 @@ func (client *HTTPClient) DeleteForBody(url string, requestBody interface{}, res
 	)
 }
 
-func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody interface{}, params []RequestParam, handleResponse func(*Request) error) error {
+func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody any, params []RequestParam, handleResponse func(*Request) error) error {
 	return client.withBackOff(
 		reqURL,
 		client.createBackOffOther(),
@@ -559,7 +559,7 @@ func (client *HTTPClient) performWithRetries(method, reqURL string, requestBody 
 	)
 }
 
-func (client *HTTPClient) performWithBody(method, url string, requestBody interface{}, params ...RequestParam) (*Request, error) {
+func (client *HTTPClient) performWithBody(method, url string, requestBody any, params ...RequestParam) (*Request, error) {
 	resolvedURL, err := client.resolveURL(url)
 	if err != nil {
 		return nil, err
