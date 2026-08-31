@@ -13,9 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/trace"
-
 	"github.com/snabble/go-logging/v2/tracex"
 	"github.com/snabble/go-logging/v2/tracex/datamap"
 	"github.com/stretchr/testify/assert"
@@ -115,7 +112,7 @@ func Test_HTTPClient_Get_TracePropagation(t *testing.T) {
 
 	provider := tracex.NewGlobalNoopTraceProvider("sampleApp", "v1.0.0")
 	defer func() { _ = provider.Shutdown(context.Background()) }()
-	ctx, span := startSpan()
+	ctx, span := tracex.GetTracer().Start(context.Background(), "test")
 	defer span.End()
 
 	err := client.Get(server.URL+"/", &entity, Context(ctx))
@@ -181,7 +178,7 @@ func Test_HTTPClient_Get_SetStreamDecoder(t *testing.T) {
 	err := client.Get(
 		server.URL+"/",
 		&entity,
-		SetStreamDecoder(func(r io.Reader, i interface{}) error {
+		SetStreamDecoder(func(r io.Reader, i any) error {
 			body, errReading = io.ReadAll(r)
 
 			entity, ok := i.(*testEntity)
@@ -266,7 +263,7 @@ func Test_HTTPClient_Get_Otel(t *testing.T) {
 
 	// Make a http request using said ctx:
 	client := NewHTTPClient()
-	err := client.Get(server.URL, &map[string]interface{}{}, Context(ctx))
+	err := client.Get(server.URL, &map[string]any{}, Context(ctx))
 	require.NoError(t, err)
 
 	// Extract the trace into a new context based on the headers:
@@ -357,7 +354,7 @@ func Test_HttpClient_Get_cache(t *testing.T) {
 	})
 	client := NewHTTPClient(CacheSize(8 * 1024 * 1024))
 
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		entity := testEntity{}
 		err := client.Get(server.URL+"/", &entity)
 
@@ -623,7 +620,7 @@ func Test_HTTPClient_PostForBody_Otel(t *testing.T) {
 
 	// Make a http request using said ctx:
 	client := NewHTTPClient()
-	err := client.PostForBody(server.URL, nil, &map[string]interface{}{}, Context(ctx))
+	err := client.PostForBody(server.URL, nil, &map[string]any{}, Context(ctx))
 	require.NoError(t, err)
 
 	// Extract the trace into a new context based on the headers:
@@ -1320,15 +1317,8 @@ func testHandler(responses []mockServerResponse) (http.Handler, *verifications) 
 	return mux, v
 }
 
-func min(i, j int) int {
-	if i < j {
-		return i
-	}
-	return j
-}
-
 func mockDecode(t *testing.T) Decoder {
-	return func(data []byte, entity interface{}) error {
+	return func(data []byte, entity any) error {
 		assert.Equal(t, "not json", string(data))
 		testEntity, ok := entity.(*testEntity)
 		require.True(t, ok)
@@ -1338,7 +1328,7 @@ func mockDecode(t *testing.T) Decoder {
 }
 
 func mockEncode(t *testing.T) Encoder {
-	return func(entity interface{}) ([]byte, error) {
+	return func(entity any) ([]byte, error) {
 		testEntity, ok := entity.(*testEntity)
 		require.True(t, ok)
 
@@ -1398,8 +1388,4 @@ func (server *testServer) do() {
 			conn.Close()
 		}
 	}()
-}
-
-func startSpan() (context.Context, trace.Span) {
-	return otel.Tracer("global").Start(context.Background(), "test")
 }
