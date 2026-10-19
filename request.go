@@ -91,9 +91,8 @@ func (req *Request) applyHeader() {
 }
 
 func (req *Request) isSuccessfulPost() bool {
-	return req.RawResponse.StatusCode == http.StatusOK ||
-		req.RawResponse.StatusCode == http.StatusCreated ||
-		req.RawResponse.StatusCode == http.StatusNoContent
+	return req.RawResponse.StatusCode >= 200 &&
+		req.RawResponse.StatusCode < 300
 }
 
 func (req *Request) isSuccessfulPostForBody() bool {
