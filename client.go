@@ -269,11 +269,11 @@ func (client *HTTPClient) perform(method, url string, entity any, params ...Requ
 				return err
 			}
 
+			defer req.RawResponse.Body.Close()
 			if req.RawResponse.StatusCode == http.StatusMovedPermanently {
 				return nil
 			}
 
-			defer req.RawResponse.Body.Close()
 			err = req.decodeBody(entity)
 
 			if req.isClientError() || req.RawResponse.StatusCode == http.StatusNotModified {
