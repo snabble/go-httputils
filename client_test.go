@@ -105,6 +105,63 @@ func Test_HTTPClient_Get_BaseURL(t *testing.T) {
 	})
 }
 
+func Test_HTTPClient_Get_BaseURLFunc(t *testing.T) {
+	serverA, _ := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "A" }`))
+	serverB, _ := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "B" }`))
+
+	t.Run("it reads the base url on every request", func(t *testing.T) {
+		current := serverA.URL
+		client := NewHTTPClient(
+			BaseURLFunc(func() string { return current }),
+		)
+		entity := testEntity{}
+
+		require.NoError(t, client.Get("/", &entity))
+		assert.Equal(t, "A", entity.Field)
+
+		current = serverB.URL // switch to other url
+
+		require.NoError(t, client.Get("/", &entity))
+		assert.Equal(t, "B", entity.Field)
+	})
+
+	t.Run("it overrides an earlier BaseURL", func(t *testing.T) {
+		client := NewHTTPClient(
+			BaseURL(serverA.URL),
+			BaseURLFunc(func() string { return serverB.URL }),
+		)
+		entity := testEntity{}
+
+		require.NoError(t, client.Get("/", &entity))
+
+		assert.Equal(t, "B", entity.Field)
+	})
+
+	t.Run("it is overridden by a later BaseURL", func(t *testing.T) {
+		client := NewHTTPClient(
+			BaseURLFunc(func() string { return serverB.URL }),
+			BaseURL(serverA.URL),
+		)
+		entity := testEntity{}
+
+		require.NoError(t, client.Get("/", &entity))
+
+		assert.Equal(t, "A", entity.Field)
+	})
+
+	t.Run("it uses no base url if the func is nil", func(t *testing.T) {
+		client := NewHTTPClient(
+			BaseURL(serverA.URL),
+			BaseURLFunc(nil),
+		)
+
+		resolved, err := client.resolveURL("/x")
+
+		require.NoError(t, err)
+		assert.Equal(t, "/x", resolved)
+	})
+}
+
 func Test_HTTPClient_Get_TracePropagation(t *testing.T) {
 	server, verify := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "test"}`))
 	client := NewHTTPClient()
