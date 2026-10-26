@@ -35,7 +35,7 @@ type CallLogger func(r *http.Request, resp *http.Response, start time.Time, err 
 
 type HTTPClientConfig struct {
 	timeout            time.Duration
-	baseURL            string
+	baseURLFunc        func() string
 	tlsConfig          *tls.Config
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
@@ -76,7 +76,15 @@ func NoRetries() HTTPClientConfigOpt {
 
 func BaseURL(url string) HTTPClientConfigOpt {
 	return func(config *HTTPClientConfig) {
-		config.baseURL = url
+		config.baseURLFunc = func() string { return url }
+	}
+}
+
+// BaseURLFunc sets a base URL, which is read on every request.
+// Use it if the base URL can change after the client was created.
+func BaseURLFunc(baseURLFunc func() string) HTTPClientConfigOpt {
+	return func(config *HTTPClientConfig) {
+		config.baseURLFunc = baseURLFunc
 	}
 }
 
@@ -150,7 +158,7 @@ var HTTPClientDefaultConfig = HTTPClientConfig{
 }
 
 type HTTPClient struct {
-	baseURL            string
+	baseURL            func() string
 	wrapped            http.Client
 	createBackOffGet   func() backoff.BackOff
 	createBackOffOther func() backoff.BackOff
@@ -171,7 +179,7 @@ func NewHTTPClient(opts ...HTTPClientConfigOpt) *HTTPClient {
 			Transport:     selectTransport(config),
 			CheckRedirect: config.checkRedirect,
 		},
-		baseURL:            config.baseURL,
+		baseURL:            config.baseURLFunc,
 		createBackOffGet:   config.createBackOffGet,
 		createBackOffOther: config.createBackOffOther,
 		logCall:            config.logCall,
@@ -600,7 +608,12 @@ func (client *HTTPClient) do(req *Request) (err error) {
 }
 
 func (client *HTTPClient) resolveURL(refString string) (string, error) {
-	if client.baseURL == "" {
+	// no func means no base url
+	baseURL := ""
+	if client.baseURL != nil {
+		baseURL = client.baseURL()
+	}
+	if baseURL == "" {
 		return refString, nil
 	}
 
@@ -612,9 +625,9 @@ func (client *HTTPClient) resolveURL(refString string) (string, error) {
 		return refString, nil
 	}
 
-	base, err := url.Parse(client.baseURL)
+	base, err := url.Parse(baseURL)
 	if err != nil {
-		return "", fmt.Errorf("invalid base url '%s': %w", client.baseURL, err)
+		return "", fmt.Errorf("invalid base url '%s': %w", baseURL, err)
 	}
 
 	return base.ResolveReference(ref).String(), nil
