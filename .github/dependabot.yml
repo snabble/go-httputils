@@ -11,4 +11,7 @@ updates:
       otel:
         patterns:
           - "go.opentelemetry.io/*"
-
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"

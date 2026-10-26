@@ -21,8 +21,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
+      - name: Configure access to private snabble repos
+        run: git config --global url.https://${{ inputs.gh-token }}@github.com/snabble.insteadOf https://github.com/snabble
+        shell: bash
 
-      - name: Build and Test
-        uses: ./.github/actions/build_and_test
+      - name: Setup go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Run go vet
+        shell: bash
+        run: go vet ./...
+
+      - name: Run Staticcheck
+        shell: bash
+        run: |
+          go install honnef.co/go/tools/cmd/staticcheck@latest && \
+          staticcheck ./...
+
+      - name: Test the source
+        shell: bash
+        run: go test ./...
