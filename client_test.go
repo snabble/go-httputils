@@ -15,7 +15,6 @@ import (
 
 	"github.com/snabble/go-logging/v2/tracex"
 	"github.com/snabble/go-logging/v2/tracex/datamap"
-	"github.com/snabble/go-utils/servicestub"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
@@ -107,14 +106,11 @@ func Test_HTTPClient_Get_BaseURL(t *testing.T) {
 }
 
 func Test_HTTPClient_Get_BaseURLFunc(t *testing.T) {
-	serverA := servicestub.StubService(t)
-	serverA.Route("/", servicestub.OK(`{ "Field": "A" }`))
-
-	serverB := servicestub.StubService(t)
-	serverB.Route("/", servicestub.OK(`{ "Field": "B" }`))
+	serverA, _ := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "A" }`))
+	serverB, _ := testMockServer(t, mockResponses(http.StatusOK, `{ "Field": "B" }`))
 
 	t.Run("it reads the base url on every request", func(t *testing.T) {
-		current := serverA.URL()
+		current := serverA.URL
 		client := NewHTTPClient(
 			BaseURLFunc(func() string { return current }),
 		)
@@ -123,7 +119,7 @@ func Test_HTTPClient_Get_BaseURLFunc(t *testing.T) {
 		require.NoError(t, client.Get("/", &entity))
 		assert.Equal(t, "A", entity.Field)
 
-		current = serverB.URL() // switch to other url
+		current = serverB.URL // switch to other url
 
 		require.NoError(t, client.Get("/", &entity))
 		assert.Equal(t, "B", entity.Field)
@@ -131,8 +127,8 @@ func Test_HTTPClient_Get_BaseURLFunc(t *testing.T) {
 
 	t.Run("it overrides an earlier BaseURL", func(t *testing.T) {
 		client := NewHTTPClient(
-			BaseURL(serverA.URL()),
-			BaseURLFunc(func() string { return serverB.URL() }),
+			BaseURL(serverA.URL),
+			BaseURLFunc(func() string { return serverB.URL }),
 		)
 		entity := testEntity{}
 
@@ -143,8 +139,8 @@ func Test_HTTPClient_Get_BaseURLFunc(t *testing.T) {
 
 	t.Run("it is overridden by a later BaseURL", func(t *testing.T) {
 		client := NewHTTPClient(
-			BaseURLFunc(func() string { return serverB.URL() }),
-			BaseURL(serverA.URL()),
+			BaseURLFunc(func() string { return serverB.URL }),
+			BaseURL(serverA.URL),
 		)
 		entity := testEntity{}
 
@@ -155,7 +151,7 @@ func Test_HTTPClient_Get_BaseURLFunc(t *testing.T) {
 
 	t.Run("it uses no base url if the func is nil", func(t *testing.T) {
 		client := NewHTTPClient(
-			BaseURL(serverA.URL()),
+			BaseURL(serverA.URL),
 			BaseURLFunc(nil),
 		)
 
