@@ -8,7 +8,7 @@ require (
 	github.com/ecosia/httpcache v0.0.0-20190828091446-8d7971c46863
 	github.com/snabble/go-logging/v2 v2.23.4
 	github.com/stretchr/testify v1.12.1
-	golang.org/x/oauth2 v0.37.0
+	golang.org/x/oauth2 v0.38.0
 )
 
 require (
